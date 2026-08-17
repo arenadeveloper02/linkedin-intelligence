@@ -230,7 +230,6 @@ export default function SearchClient() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void runSearch();
         }}
         className="mx-auto mt-10 flex max-w-2xl items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-md)]"
       >
@@ -249,11 +248,21 @@ export default function SearchClient() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+            }
+          }}
           placeholder="Company name"
           disabled={searching}
           className="min-w-0 flex-1 bg-transparent px-2 py-3 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
         />
-        <button type="submit" disabled={searching || !query.trim()} className="btn-gradient shrink-0">
+        <button
+          type="button"
+          onClick={() => void runSearch()}
+          disabled={searching || !query.trim()}
+          className="btn-gradient shrink-0"
+        >
           {searching ? 'Searching LinkedIn\u2026' : 'Analyze'}
         </button>
       </form>
@@ -312,7 +321,7 @@ export default function SearchClient() {
       {searching ? (
         <div className="mt-12">
           <p className="text-center text-sm font-medium text-[var(--ds-text-secondary)]">
-            Finding matching LinkedIn companies\u2026
+            Finding matching LinkedIn companies&hellip;
           </p>
           <div className="progress-indeterminate mx-auto mt-4 max-w-md" />
           <div className="mt-8 grid gap-6 md:grid-cols-2">
@@ -341,15 +350,12 @@ export default function SearchClient() {
         <div className="mt-16 grid gap-6 md:grid-cols-3">
           {INFO_CARDS.map((card) => (
             <div key={card.title} className="ds-card">
-              <span
-                className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ background: 'var(--ds-gradient-brand)' }}
-              >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)] text-[var(--ds-brand)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-5 w-5"
                   fill="none"
-                  stroke="white"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -358,7 +364,9 @@ export default function SearchClient() {
                   <path d={card.icon} />
                 </svg>
               </span>
-              <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">{card.title}</h3>
+              <h3 className="mt-4 text-base font-semibold text-[var(--ds-text-primary)]">
+                {card.title}
+              </h3>
               <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">{card.body}</p>
             </div>
           ))}

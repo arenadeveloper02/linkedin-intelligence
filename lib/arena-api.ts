@@ -2,6 +2,8 @@ import type { CompanyResult } from '@/lib/types';
 
 const ARENA_BASE = 'https://agent.thearena.ai/api/workflows';
 
+const ARENA_API_KEY_FALLBACK = 'sk-sim-3-NEFuWfj8Ptg89Tlrcmlu417GuXBwwg';
+
 export const SEARCH_WORKFLOW_ID = 'c821b89f-5f32-44b3-9cc6-c0eea5b72b36';
 
 export const analysisWorkflows: { ownBrand: string; competitor: string | null } = {
@@ -17,7 +19,7 @@ export async function executeWorkflow(
   workflowId: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const apiKey = process.env.ARENA_API_KEY;
+  const apiKey = process.env.ARENA_API_KEY || ARENA_API_KEY_FALLBACK;
   if (!apiKey) throw new Error('ARENA_API_KEY is not configured');
 
   const res = await fetch(`${ARENA_BASE}/${workflowId}/execute`, {
