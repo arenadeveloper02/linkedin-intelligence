@@ -86,6 +86,94 @@ export function extractOutput(parsed: Record<string, unknown>): Record<string, u
   return parsed;
 }
 
+const AGENT_KEY_GROUPS: { namespace: string; keys: string[] }[] = [
+  {
+    namespace: 'strategyagent',
+    keys: ['strategy', 'personas', 'hookLibrary', 'ctaLibrary', 'audienceDetail'],
+  },
+  {
+    namespace: 'contentcreativeagent',
+    keys: ['content', 'creative', 'engagement', 'topicClusters'],
+  },
+  {
+    namespace: 'messagingagent',
+    keys: ['company', 'messaging', 'stats', 'summary'],
+  },
+  {
+    namespace: 'creativeinsightagent',
+    keys: ['imageryTypes', 'recommendations', 'observations', 'textStyle'],
+  },
+  {
+    namespace: 'competitiveagent',
+    keys: [
+      'campaigns',
+      'competitive',
+      'launches',
+      'messagingEvolution',
+      'recommendations',
+      'scorecard',
+      'scorecardOverall',
+    ],
+  },
+  {
+    namespace: 'getcompanyprofile',
+    keys: [
+      'id',
+      'name',
+      'description',
+      'public_identifier',
+      'profile_url',
+      'followers_count',
+      'employee_count',
+      'website',
+      'logo',
+      'profile',
+    ],
+  },
+  {
+    namespace: 'getcompanypost',
+    keys: ['items'],
+  },
+];
+
+/**
+ * The Arena streaming response returns the final output keyed by opaque block IDs
+ * (UUIDs), each containing that agent's fields. This normalizes the output into
+ * the namespaced keys the report expects (e.g. 'strategyagent.strategy',
+ * 'getcompanypost.items') by matching each block's field names against the known
+ * agent key groups. If the output is already namespaced, it is returned as-is.
+ */
+export function normalizeAnalysisOutput(
+  output: Record<string, unknown>,
+): Record<string, unknown> {
+  const hasNamespacedKeys = Object.keys(output).some((k) => k.includes('.'));
+  if (hasNamespacedKeys) return output;
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(output)) {
+    if (!isRecord(value)) {
+      normalized[key] = value;
+      continue;
+    }
+    const childKeys = Object.keys(value);
+    let best: { namespace: string; score: number } | null = null;
+    for (const group of AGENT_KEY_GROUPS) {
+      const score = childKeys.filter((k) => group.keys.includes(k)).length;
+      if (score > 0 && (!best || score > best.score)) {
+        best = { namespace: group.namespace, score };
+      }
+    }
+    if (best) {
+      for (const [childKey, childValue] of Object.entries(value)) {
+        normalized[`${best.namespace}.${childKey}`] = childValue;
+      }
+    } else {
+      normalized[key] = value;
+    }
+  }
+  return normalized;
+}
+
 export function extractCompanies(parsed: Record<string, unknown>): CompanyResult[] {
   const output = extractOutput(parsed);
   const candidates: unknown[] = [output.companies, output['companylistingagent.companies']];

@@ -4,7 +4,6 @@ import { Poppins } from 'next/font/google';
 import './globals.css';
 import { ArenaEmailProvider } from '@/components/arena-email-provider';
 import { getArenaEmailId } from '@/lib/arena-email';
-import AppHeader from '@/components/AppHeader';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -23,10 +22,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body className={`${poppins.variable} font-sans antialiased`}>
-        <ArenaEmailProvider emailId={emailId}>
-          <AppHeader />
-          {children}
-        </ArenaEmailProvider>
+        <ArenaEmailProvider emailId={emailId}>{children}</ArenaEmailProvider>
       </body>
     </html>
   );

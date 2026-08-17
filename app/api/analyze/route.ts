@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { analysisWorkflows, executeWorkflow, extractOutput } from '@/lib/arena-api';
+import {
+  analysisWorkflows,
+  executeWorkflow,
+  extractOutput,
+  normalizeAnalysisOutput,
+} from '@/lib/arena-api';
 
 export const maxDuration = 300;
 
@@ -83,7 +88,7 @@ export async function POST(req: NextRequest) {
       includeThinking: false,
       includeToolCalls: false,
     });
-    const output = extractOutput(parsed);
+    const output = normalizeAnalysisOutput(extractOutput(parsed));
     return NextResponse.json({ output });
   } catch {
     return NextResponse.json({ error: 'Analysis could not be completed' }, { status: 502 });

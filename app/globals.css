@@ -5,24 +5,28 @@
 @tailwind utilities;
 
 body {
-  background: var(--ds-surface-subtle);
-  color: var(--ds-text-primary);
+  background: var(--ds-surface-subtle, #F7F8F9);
+  color: var(--ds-text-primary, #2C2D33);
 }
 
 @layer components {
   .ds-card {
-    background: var(--ds-surface-page);
-    border: 1px solid var(--ds-border-default);
-    border-radius: var(--ds-radius-lg);
-    box-shadow: var(--ds-elevation-sm);
+    background: var(--ds-surface-page, #FFFFFF);
+    border: 1px solid var(--ds-border-default, #E2E3E5);
+    border-radius: var(--ds-radius-lg, 16px);
+    box-shadow: var(--ds-elevation-sm, 0px 1px 2px rgba(44, 45, 51, 0.08));
     padding: 1.5rem;
+    transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ds-card:hover {
+    box-shadow: var(--ds-elevation-md, 0px 2px 8px rgba(44, 45, 51, 0.1));
   }
   .ds-chip {
     display: inline-flex;
     align-items: center;
     border-radius: 9999px;
-    background: var(--ds-brand-surface);
-    color: var(--ds-blue-800);
+    background: var(--ds-brand-surface, #F3F8FE);
+    color: var(--ds-blue-800, #10458B);
     padding: 0.25rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 500;
@@ -32,8 +36,8 @@ body {
     display: inline-flex;
     align-items: center;
     border-radius: 9999px;
-    background: var(--ds-grey-100);
-    color: var(--ds-text-secondary);
+    background: var(--ds-grey-100, #EFF0F2);
+    color: var(--ds-text-secondary, #575A66);
     padding: 0.25rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 500;
@@ -43,20 +47,22 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    background: var(--ds-gradient-brand);
+    background: linear-gradient(135deg, #2C2D33 0%, #41444C 100%);
     color: #fff;
-    border-radius: var(--ds-radius-md);
+    border-radius: var(--ds-radius-md, 12px);
     padding: 0.625rem 1.25rem;
     font-size: 0.875rem;
     font-weight: 600;
-    box-shadow: var(--ds-elevation-sm);
+    box-shadow: var(--ds-elevation-sm, 0px 1px 2px rgba(44, 45, 51, 0.08));
     transition:
       opacity 100ms cubic-bezier(0.4, 0, 0.2, 1),
+      transform 100ms cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 100ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   .btn-gradient:hover:not(:disabled) {
     opacity: 0.92;
-    box-shadow: var(--ds-elevation-md);
+    transform: translateY(-1px);
+    box-shadow: var(--ds-elevation-md, 0px 2px 8px rgba(44, 45, 51, 0.1));
   }
   .btn-gradient:disabled {
     opacity: 0.38;
@@ -67,17 +73,20 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    background: var(--ds-surface-page);
-    color: var(--ds-brand);
-    border: 1px solid var(--ds-border-default);
-    border-radius: var(--ds-radius-md);
+    background: transparent;
+    color: #2C2D33;
+    border: 1px solid #2C2D33;
+    border-radius: var(--ds-radius-md, 12px);
     padding: 0.625rem 1.25rem;
     font-size: 0.875rem;
     font-weight: 600;
-    transition: background 100ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background 100ms cubic-bezier(0.4, 0, 0.2, 1),
+      color 100ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: var(--ds-brand-surface);
+    background: #2C2D33;
+    color: #fff;
   }
   .btn-secondary:disabled {
     opacity: 0.38;
@@ -87,9 +96,9 @@ body {
     border-radius: 8px;
     background: linear-gradient(
       90deg,
-      var(--ds-grey-100) 25%,
-      var(--ds-grey-200) 50%,
-      var(--ds-grey-100) 75%
+      var(--ds-grey-100, #EFF0F2) 25%,
+      var(--ds-grey-200, #E2E3E5) 50%,
+      var(--ds-grey-100, #EFF0F2) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.4s ease infinite;
@@ -99,7 +108,7 @@ body {
     height: 4px;
     overflow: hidden;
     border-radius: 9999px;
-    background: var(--ds-grey-100);
+    background: var(--ds-grey-100, #EFF0F2);
   }
   .progress-indeterminate::after {
     content: '';
@@ -109,7 +118,7 @@ body {
     left: -40%;
     width: 40%;
     border-radius: 9999px;
-    background: var(--ds-gradient-brand);
+    background: linear-gradient(135deg, #2C2D33 0%, #41444C 100%);
     animation: progress-slide 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 }

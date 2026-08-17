@@ -19,8 +19,10 @@ model Analysis {
   followers    Int?
   profileUrl   String?
   analysisType String
-  status       String
+  status       String   @default("completed")
   output       String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt @default(now())
+
+  @@index([emailId, createdAt])
 }
