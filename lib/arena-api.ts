@@ -81,24 +81,43 @@ function parseWorkflowText(text: string): Record<string, unknown> {
     }
   }
 
-  if (finalOutput) return { output: finalOutput };
+  // Some workflows (e.g. the playbook) stream the whole content as chunks and
+  // then emit a final event with an EMPTY output ({}). Only prefer the final
+  // event when it actually carries data; otherwise fall back to the chunks.
+  if (finalOutput && Object.keys(finalOutput).length > 0) return { output: finalOutput };
 
   if (Object.keys(output).length === 0) {
     for (const [blockId, chunkText] of Object.entries(chunksByBlock)) {
       const merged = parseChunkRecords(chunkText);
-      if (Object.keys(merged).length > 0) output[blockId] = merged;
+      if (Object.keys(merged).length > 0) {
+        output[blockId] = merged;
+      } else if (chunkText.trim().length > 0) {
+        // Preserve the raw streamed text keyed by the block id so callers can
+        // still map it (e.g. the playbook route renders it as rich text).
+        output[blockId] = chunkText.trim();
+      }
     }
   }
   return { output };
 }
 
 /**
- * Streamed chunks contain newline-separated JSON documents. Merge every
- * top-level JSON object into a single record for the block; non-object
- * documents (arrays / scalars) cannot be keyed reliably and are skipped
- * in this fallback path.
+ * Streamed chunks may contain either one large JSON document spanning many
+ * lines (e.g. the playbook content) or newline-separated JSON documents.
+ * Try parsing the whole accumulated text first, then merge every top-level
+ * JSON object line-by-line as a fallback; non-object documents (arrays /
+ * scalars) cannot be keyed reliably and are skipped in this fallback path.
  */
 function parseChunkRecords(chunkText: string): Record<string, unknown> {
+  const whole = chunkText.trim();
+  if (whole) {
+    try {
+      const parsedWhole: unknown = JSON.parse(whole);
+      if (isRecord(parsedWhole)) return parsedWhole;
+    } catch {
+      // not a single JSON document — fall through to line-based merging
+    }
+  }
   const merged: Record<string, unknown> = {};
   for (const line of chunkText.split('\n')) {
     const doc = line.trim();

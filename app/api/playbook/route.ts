@@ -40,23 +40,43 @@ export async function POST(req: NextRequest) {
 
   try {
     // Payload matches the documented playbook workflow API exactly:
-    // { email, id, stream: false, selectedOutputs: ['playbookagent.content'], ... }
+    // { email, id, stream: true, selectedOutputs: ['playbookagent.content'], ... }
     const parsed = await executeWorkflow(PLAYBOOK_WORKFLOW_ID, {
       email,
       id,
-      stream: false,
+      stream: true,
       selectedOutputs: ['playbookagent.content'],
       includeThinking: false,
       includeToolCalls: false,
     });
     const output = extractOutput(parsed);
     // The workflow may return the content at output.content, under the
-    // namespaced key, or nested inside a playbookagent block — map all three.
+    // namespaced key, or nested inside a playbookagent block \u2014 map all three.
     const agentBlock = output.playbookagent;
-    const contentRaw =
+    let contentRaw: unknown =
       output.content ??
       output['playbookagent.content'] ??
       (isRecord(agentBlock) ? agentBlock.content : undefined);
+
+    // Streamed responses key the content by an opaque block id (UUID) with an
+    // empty final event \u2014 fall back to the first block value that carries the
+    // playbook (a raw string, a { content } record, or the playbook object).
+    if (contentRaw === undefined || contentRaw === null) {
+      for (const v of Object.values(output)) {
+        if (typeof v === 'string' && v.trim().length > 0) {
+          contentRaw = v;
+          break;
+        }
+        if (isRecord(v)) {
+          if (typeof v.content === 'string' && v.content.trim().length > 0) {
+            contentRaw = v.content;
+          } else {
+            contentRaw = v;
+          }
+          break;
+        }
+      }
+    }
 
     let playbook: PlaybookContent | null = null;
     let playbookText: string | null = null;
@@ -68,7 +88,7 @@ export async function POST(req: NextRequest) {
         if (isRecord(p)) playbook = p as PlaybookContent;
         else playbookText = cleaned;
       } catch {
-        // Not strict JSON — return the raw content so the client renders it as rich text.
+        // Not strict JSON \u2014 return the raw content so the client renders it as rich text.
         playbookText = cleaned;
       }
     } else if (isRecord(contentRaw)) {

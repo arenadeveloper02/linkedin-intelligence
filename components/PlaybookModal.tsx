@@ -108,7 +108,14 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
         const runs = Array.isArray(data.runs) ? data.runs : [];
         const run = runs.find((r) => r.id === runId);
         if (!run || cancelled) return;
-        if (run.hasCompetitor) setRunHasCompetitor(true);
+        // Show the competitor radio whenever competitor data is available for
+        // this run \u2014 either via the hasCompetitor flag or saved competitorOutput.
+        if (
+          run.hasCompetitor ||
+          (run.competitorOutput && Object.keys(run.competitorOutput).length > 0)
+        ) {
+          setRunHasCompetitor(true);
+        }
         const summary = typeof run.summary === 'string' ? run.summary.trim() : '';
         if (!summary) return;
         const cleaned = stripCodeFences(summary);
@@ -130,7 +137,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
         setHasExisting(true);
         setStatus('done');
       } catch {
-        // ignore — generation stays available via the button
+        // ignore \u2014 generation stays available via the button
       } finally {
         if (!cancelled) setPrefetching(false);
       }
@@ -347,8 +354,8 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {playbook.campaignIdeas.map((idea, i) => (
                     <div
-                      key={`idea-${i}`}
-                      className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-surface-subtle)] p-4"
+                      key={`ci-${i}`}
+                      className="rounded-xl border border-[var(--ds-border-default)] bg-white p-4"
                     >
                       {idea.name ? (
                         <p className="font-semibold text-[var(--ds-text-primary)]">{idea.name}</p>
@@ -358,16 +365,10 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                           {idea.concept}
                         </p>
                       ) : null}
-                      {idea.cadence ? (
-                        <p className="mt-2 text-xs text-[var(--ds-text-tertiary)]">
-                          Cadence: {idea.cadence}
-                        </p>
-                      ) : null}
-                      {idea.cta ? (
-                        <p className="mt-1 text-xs font-medium text-[var(--ds-text-link)]">
-                          CTA: {idea.cta}
-                        </p>
-                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {idea.cadence ? <span className="pill">{idea.cadence}</span> : null}
+                        {idea.cta ? <span className="ds-chip">{idea.cta}</span> : null}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -391,8 +392,8 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                   Engagement plays
                 </h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                  {playbook.engagementPlays.map((e, i) => (
-                    <li key={`ep-${i}`}>{e}</li>
+                  {playbook.engagementPlays.map((p, i) => (
+                    <li key={`ep-${i}`}>{p}</li>
                   ))}
                 </ul>
               </section>
@@ -400,7 +401,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           </div>
         ) : null}
 
-        {playbookText ? (
+        {!playbook && playbookText ? (
           <div className="mt-6">
             <RichText text={playbookText} />
           </div>
