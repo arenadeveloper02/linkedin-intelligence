@@ -2,13 +2,18 @@
 
 import { useState } from 'react';
 import AnalysisProgress from '@/components/AnalysisProgress';
+import CompanyLogo from '@/components/CompanyLogo';
 import CompanyResults from '@/components/CompanyResults';
+import CompetitorModal from '@/components/CompetitorModal';
+import PlaybookModal from '@/components/PlaybookModal';
 import ReportDashboard from '@/components/ReportDashboard';
 import { saveAnalysis } from '@/lib/actions';
+import { formatDate } from '@/lib/format';
 import type {
   AnalysisOutput,
-  AnalysisType,
+  ArenaRunEntry,
   CompanyResult,
+  JsonValue,
   SelectedCompany,
 } from '@/lib/types';
 
@@ -21,7 +26,8 @@ type View =
   | 'analyzing'
   | 'analysis-error'
   | 'competitor-unavailable'
-  | 'report';
+  | 'report'
+  | 'history';
 
 const EXAMPLES = ['Position2', 'Sambanova', 'Stripe'];
 
@@ -43,12 +49,34 @@ const INFO_CARDS = [
   },
 ];
 
+function summaryPreview(run: ArenaRunEntry): string | null {
+  const s: JsonValue | undefined = run.output['messagingagent.summary'];
+  if (typeof s === 'string') return s;
+  if (s && typeof s === 'object' && !Array.isArray(s)) {
+    const t = s.text;
+    if (typeof t === 'string') return t;
+  }
+  return null;
+}
+
 export default function SearchClient() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<View>('search');
   const [companies, setCompanies] = useState<CompanyResult[]>([]);
   const [selected, setSelected] = useState<SelectedCompany | null>(null);
   const [report, setReport] = useState<AnalysisOutput | null>(null);
+  // The Arena run id for the current report; required for Playbook and
+  // Competitor Analysis calls. Resolved from the remote history workflow.
+  const [runId, setRunId] = useState<string | null>(null);
+  const [hasCompetitor, setHasCompetitor] = useState(false);
+  // History is persisted server-side by the Arena history workflow (keyed by
+  // the visitor's Arena email id), so it survives page reloads.
+  const [historyRuns, setHistoryRuns] = useState<ArenaRunEntry[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'idle',
+  );
+  const [showCompetitorModal, setShowCompetitorModal] = useState(false);
+  const [showPlaybookModal, setShowPlaybookModal] = useState(false);
 
   const runSearch = async () => {
     const term = query.trim();
@@ -73,7 +101,23 @@ export default function SearchClient() {
     }
   };
 
-  const runAnalysis = async (sel: SelectedCompany) => {
+  const resolveRunId = async (companyId: string) => {
+    try {
+      const res = await fetch('/api/arena-history');
+      if (!res.ok) return;
+      const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+      const runs = Array.isArray(data.runs) ? data.runs : [];
+      const match = runs.find((r) => r.companyId === companyId) ?? runs[0];
+      if (match) {
+        setRunId(match.id);
+        setHasCompetitor(match.hasCompetitor);
+      }
+    } catch {
+      // run id stays unresolved; playbook/competitor linking will be limited
+    }
+  };
+
+  const runAnalysis = async (sel: SelectedCompany, parentId?: string | null) => {
     setSelected(sel);
     setView('analyzing');
     try {
@@ -84,6 +128,7 @@ export default function SearchClient() {
           companyName: sel.companyName,
           companyId: sel.companyId,
           analysisType: sel.analysisType,
+          parentId: parentId ?? undefined,
         }),
       });
       if (res.status === 501) {
@@ -98,6 +143,13 @@ export default function SearchClient() {
       const output = data.output ?? {};
       setReport(output);
       setView('report');
+      if (sel.analysisType === 'competitor') {
+        setHasCompetitor(true);
+      } else {
+        setRunId(null);
+        setHasCompetitor(false);
+        void resolveRunId(sel.companyId);
+      }
       void saveAnalysis({
         companyName: sel.companyName,
         companyId: sel.companyId,
@@ -114,7 +166,7 @@ export default function SearchClient() {
     }
   };
 
-  const handleAnalyze = (c: CompanyResult, type: AnalysisType) => {
+  const handleAnalyze = (c: CompanyResult) => {
     if (!c.id) return;
     void runAnalysis({
       companyName: c.name,
@@ -125,14 +177,76 @@ export default function SearchClient() {
       followers: c.followers_count,
       description: c.description ?? c.summary,
       profileUrl: c.profile_url,
-      analysisType: type,
+      analysisType: 'own-brand',
     });
+  };
+
+  const handleCompetitorSelect = (c: CompanyResult) => {
+    if (!c.id) return;
+    setShowCompetitorModal(false);
+    void runAnalysis(
+      {
+        companyName: c.name,
+        companyId: c.id,
+        companyLogo: c.logo,
+        industry: c.industry,
+        location: c.location,
+        followers: c.followers_count,
+        description: c.description ?? c.summary,
+        profileUrl: c.profile_url,
+        analysisType: 'competitor',
+      },
+      runId,
+    );
+  };
+
+  const openHistory = () => {
+    setView('history');
+    setHistoryStatus('loading');
+    void (async () => {
+      try {
+        const res = await fetch('/api/arena-history');
+        if (!res.ok) {
+          setHistoryStatus('error');
+          return;
+        }
+        const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+        setHistoryRuns(Array.isArray(data.runs) ? data.runs : []);
+        setHistoryStatus('ready');
+      } catch {
+        setHistoryStatus('error');
+      }
+    })();
+  };
+
+  const viewHistoryEntry = (run: ArenaRunEntry) => {
+    setSelected({
+      companyName: run.companyName,
+      companyId: run.companyId,
+      companyLogo: run.companyLogo,
+      industry: null,
+      location: null,
+      followers: null,
+      description: null,
+      profileUrl: null,
+      analysisType: 'own-brand',
+    });
+    setReport(run.output);
+    setRunId(run.id);
+    setHasCompetitor(run.hasCompetitor);
+    setShowCompetitorModal(false);
+    setShowPlaybookModal(false);
+    setView('report');
   };
 
   const resetToSearch = () => {
     setView('search');
     setSelected(null);
     setReport(null);
+    setRunId(null);
+    setHasCompetitor(false);
+    setShowCompetitorModal(false);
+    setShowPlaybookModal(false);
   };
 
   if (view === 'results') {
@@ -147,16 +261,36 @@ export default function SearchClient() {
 
   if (view === 'report' && selected && report) {
     return (
-      <ReportDashboard
-        company={selected}
-        output={report}
-        onBack={resetToSearch}
-        onRunCompetitor={
-          selected.analysisType === 'own-brand'
-            ? () => void runAnalysis({ ...selected, analysisType: 'competitor' })
-            : undefined
-        }
-      />
+      <>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-3 px-6 pt-6">
+          <button
+            type="button"
+            onClick={() => setShowPlaybookModal(true)}
+            className="btn-secondary"
+          >
+            Playbook
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCompetitorModal(true)}
+            className="btn-gradient"
+          >
+            Competitor Analysis
+          </button>
+        </div>
+        <ReportDashboard company={selected} output={report} onBack={resetToSearch} />
+        <CompetitorModal
+          open={showCompetitorModal}
+          onClose={() => setShowCompetitorModal(false)}
+          onSelect={handleCompetitorSelect}
+        />
+        <PlaybookModal
+          open={showPlaybookModal}
+          onClose={() => setShowPlaybookModal(false)}
+          runId={runId}
+          hasCompetitor={hasCompetitor}
+        />
+      </>
     );
   }
 
@@ -173,7 +307,7 @@ export default function SearchClient() {
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <button
               type="button"
-              onClick={() => void runAnalysis(selected)}
+              onClick={() => void runAnalysis(selected, runId)}
               className="btn-gradient"
             >
               Retry analysis
@@ -212,10 +346,116 @@ export default function SearchClient() {
     );
   }
 
+  if (view === 'history') {
+    return (
+      <main className="mx-auto max-w-4xl px-6 py-10">
+        <button
+          type="button"
+          onClick={() => setView('search')}
+          className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+        >
+          &larr; Back to search
+        </button>
+
+        <p className="mt-6 text-xs font-semibold tracking-[0.2em] text-[var(--ds-text-tertiary)]">
+          HISTORY
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--ds-text-primary)]">
+          Previous analyses
+        </h1>
+
+        {historyStatus === 'loading' ? (
+          <div className="mt-8 space-y-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="ds-card">
+                <div className="flex items-center gap-4">
+                  <div className="skeleton h-10 w-10" />
+                  <div className="flex-1 space-y-2">
+                    <div className="skeleton h-4 w-1/3" />
+                    <div className="skeleton h-3 w-1/4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : historyStatus === 'error' ? (
+          <div className="ds-card mt-8 border-[var(--ds-error-300)] text-center">
+            <h2 className="text-base font-semibold text-[var(--ds-text-primary)]">
+              Unable to load history
+            </h2>
+            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
+              We couldn&apos;t retrieve your previous runs. Please try again.
+            </p>
+            <button type="button" onClick={openHistory} className="btn-secondary mt-4">
+              Try again
+            </button>
+          </div>
+        ) : historyRuns.length === 0 ? (
+          <div className="ds-card mt-8 text-center">
+            <h2 className="text-base font-semibold text-[var(--ds-text-primary)]">
+              No previous runs yet
+            </h2>
+            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
+              Run your first LinkedIn intelligence analysis to see it here.
+            </p>
+            <button type="button" onClick={() => setView('search')} className="btn-gradient mt-5">
+              Start a search
+            </button>
+          </div>
+        ) : (
+          <div className="mt-8 space-y-4">
+            {historyRuns.map((run) => {
+              const preview = summaryPreview(run);
+              return (
+                <div key={run.id} className="ds-card">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <CompanyLogo name={run.companyName} logo={run.companyLogo} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-[var(--ds-text-primary)]">
+                        {run.companyName}
+                      </p>
+                      {run.createdAt ? (
+                        <p className="text-xs text-[var(--ds-text-tertiary)]">
+                          {formatDate(run.createdAt)}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="ds-chip">
+                      {run.type === 'OWN_BRANDING' ? 'Own Brand' : run.type}
+                    </span>
+                    {run.hasCompetitor ? <span className="pill">Competitor data</span> : null}
+                    <button
+                      type="button"
+                      onClick={() => viewHistoryEntry(run)}
+                      className="btn-secondary"
+                    >
+                      View
+                    </button>
+                  </div>
+                  {preview ? (
+                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
+                      {preview}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    );
+  }
+
   const searching = view === 'searching';
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
+      <div className="flex justify-end">
+        <button type="button" onClick={openHistory} disabled={searching} className="btn-secondary">
+          History
+        </button>
+      </div>
+
       <div className="text-center">
         <span className="ds-chip">Organic LinkedIn intelligence</span>
         <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-tight text-[var(--ds-text-primary)] sm:text-5xl">
@@ -350,12 +590,12 @@ export default function SearchClient() {
         <div className="mt-16 grid gap-6 md:grid-cols-3">
           {INFO_CARDS.map((card) => (
             <div key={card.title} className="ds-card">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)] text-[var(--ds-brand)]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-5 w-5"
                   fill="none"
-                  stroke="currentColor"
+                  stroke="var(--ds-brand)"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"

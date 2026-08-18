@@ -6,6 +6,7 @@ import {
   extractOutput,
   normalizeAnalysisOutput,
 } from '@/lib/arena-api';
+import { getArenaEmailId } from '@/lib/arena-email';
 
 export const maxDuration = 300;
 
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
   const companyName = typeof payload.companyName === 'string' ? payload.companyName.trim() : '';
   const companyId = typeof payload.companyId === 'string' ? payload.companyId.trim() : '';
   const analysisType = payload.analysisType === 'competitor' ? 'competitor' : 'own-brand';
+  const parentId = typeof payload.parentId === 'string' ? payload.parentId.trim() : '';
 
   if (!companyName || !companyId) {
     return NextResponse.json(
@@ -79,15 +81,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const email = (await getArenaEmailId()) ?? '';
+
+  const body: Record<string, unknown> = {
+    companyName,
+    companyId,
+    email,
+    type: analysisType === 'competitor' ? 'COMPETITOR' : 'OWN',
+    stream: true,
+    selectedOutputs: OWN_BRAND_OUTPUTS,
+    includeThinking: false,
+    includeToolCalls: false,
+  };
+
+  if (analysisType === 'competitor') {
+    body.isCompetitor = true;
+    if (parentId) body.id = parentId;
+  }
+
   try {
-    const parsed = await executeWorkflow(workflowId, {
-      companyName,
-      companyId,
-      stream: true,
-      selectedOutputs: OWN_BRAND_OUTPUTS,
-      includeThinking: false,
-      includeToolCalls: false,
-    });
+    const parsed = await executeWorkflow(workflowId, body);
     const output = normalizeAnalysisOutput(extractOutput(parsed));
     return NextResponse.json({ output });
   } catch {

@@ -2,12 +2,12 @@
 
 import CompanyLogo from '@/components/CompanyLogo';
 import { formatFollowers } from '@/lib/format';
-import type { AnalysisType, CompanyResult } from '@/lib/types';
+import type { CompanyResult } from '@/lib/types';
 
 interface CompanyResultsProps {
   companies: CompanyResult[];
   onBack: () => void;
-  onAnalyze: (company: CompanyResult, type: AnalysisType) => void;
+  onAnalyze: (company: CompanyResult) => void;
 }
 
 export default function CompanyResults({ companies, onBack, onAnalyze }: CompanyResultsProps) {
@@ -79,18 +79,10 @@ export default function CompanyResults({ companies, onBack, onAnalyze }: Company
                   <button
                     type="button"
                     disabled={!c.id}
-                    onClick={() => onAnalyze(c, 'own-brand')}
+                    onClick={() => onAnalyze(c)}
                     className="btn-gradient"
                   >
-                    Own Brand Analysis
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!c.id}
-                    onClick={() => onAnalyze(c, 'competitor')}
-                    className="btn-secondary"
-                  >
-                    Competitor Analysis &rarr;
+                    Analyze
                   </button>
                 </div>
               </div>

@@ -6,9 +6,13 @@ const ARENA_API_KEY_FALLBACK = 'sk-sim-3-NEFuWfj8Ptg89Tlrcmlu417GuXBwwg';
 
 export const SEARCH_WORKFLOW_ID = 'c821b89f-5f32-44b3-9cc6-c0eea5b72b36';
 
+export const HISTORY_WORKFLOW_ID = 'bc8877bb-bdda-445f-a1a0-9eb1709af4b6';
+
+export const PLAYBOOK_WORKFLOW_ID = '00bfdfb5-3726-4a32-a130-1eeb51d6a238';
+
 export const analysisWorkflows: { ownBrand: string; competitor: string | null } = {
   ownBrand: '13e76c2b-bbdc-43c5-835e-92027a6c43e9',
-  competitor: null,
+  competitor: '13e76c2b-bbdc-43c5-835e-92027a6c43e9',
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -219,6 +223,30 @@ export function normalizeAnalysisOutput(
     }
   }
   return normalized;
+}
+
+/**
+ * The history workflow returns each run's saved output as one flat record
+ * (keys like 'items', 'strategy', 'stats', 'name', ...). This maps those flat
+ * keys onto the namespaced keys the report dashboard expects
+ * (e.g. 'getcompanypost.items', 'strategyagent.strategy'). Already-namespaced
+ * records are returned as-is.
+ */
+export function namespaceHistoryOutput(
+  flat: Record<string, unknown>,
+): Record<string, unknown> {
+  const hasNamespacedKeys = Object.keys(flat).some((k) => k.includes('.'));
+  if (hasNamespacedKeys) return flat;
+
+  const namespaced: Record<string, unknown> = {};
+  for (const group of AGENT_KEY_GROUPS) {
+    for (const key of group.keys) {
+      if (Object.prototype.hasOwnProperty.call(flat, key)) {
+        namespaced[`${group.namespace}.${key}`] = flat[key];
+      }
+    }
+  }
+  return namespaced;
 }
 
 export function extractCompanies(parsed: Record<string, unknown>): CompanyResult[] {

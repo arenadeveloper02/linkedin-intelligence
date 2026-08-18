@@ -79,3 +79,52 @@ export interface SavedAnalysis {
   createdAt: string;
   output: AnalysisOutput;
 }
+
+/**
+ * A single analysis run entry from the Arena history workflow.
+ * History is persisted server-side by the Arena service (keyed by the
+ * visitor's Arena email id), so it survives page reloads.
+ */
+export interface ArenaRunEntry {
+  id: string;
+  companyId: string;
+  companyName: string;
+  companyLogo: string | null;
+  createdAt: string;
+  type: string;
+  hasCompetitor: boolean;
+  output: AnalysisOutput;
+}
+
+export type PlaybookSource = 'own' | 'competitor';
+
+export interface PlaybookRecommendation {
+  area?: string;
+  action?: string;
+  impact?: string;
+  priority?: string;
+}
+
+export interface PlaybookCampaignIdea {
+  name?: string;
+  concept?: string;
+  cadence?: string;
+  cta?: string;
+}
+
+export interface PlaybookCadence {
+  currentPostsPerWeek?: number;
+  targetPostsPerWeek?: number;
+  rationale?: string;
+}
+
+export interface PlaybookContent {
+  headline?: string;
+  quickWins?: string[];
+  recommendations?: PlaybookRecommendation[];
+  currentVsTarget?: PlaybookCadence;
+  gaps?: string[];
+  campaignIdeas?: PlaybookCampaignIdea[];
+  activities?: string[];
+  engagementPlays?: string[];
+}
