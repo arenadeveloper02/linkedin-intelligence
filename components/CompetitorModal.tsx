@@ -186,7 +186,7 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(44, 45, 51, 0.72)' }}
     >
-      <div className="ds-card max-h-[85vh] w-full max-w-3xl overflow-y-auto">
+      <div className="ds-card max-h-[85vh] w-full max-w-5xl overflow-y-auto">
         <div className="flex items-start justify-between gap-4">
           <div>
             <span className="ds-chip">Competitor Analysis</span>
@@ -271,6 +271,12 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
           </p>
         ) : null}
 
+        {status === 'analysis-error' ? (
+          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
+            The competitor analysis could not be completed. Please search again and retry.
+          </p>
+        ) : null}
+
         {status === 'results' ? (
           <div className="mt-5 space-y-3">
             {companies.map((c, index) => {
@@ -308,87 +314,71 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-surface-subtle)] p-4">
               <CompanyLogo name={selected.name} logo={selected.logo} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-[var(--ds-text-primary)]">{selected.name}</p>
+                <p className="truncate font-semibold text-[var(--ds-text-primary)]">
+                  {selected.name}
+                </p>
                 <p className="text-xs text-[var(--ds-text-tertiary)]">
-                  Running competitor analysis{'\u2026'} this can take a few minutes.
+                  Running competitor intelligence analysis{'\u2026'}
                 </p>
               </div>
             </div>
             <div className="progress-indeterminate mt-4" />
-          </div>
-        ) : null}
-
-        {status === 'analysis-error' ? (
-          <div className="mt-4">
-            <p className="text-sm font-medium text-[var(--ds-text-error)]">
-              The competitor analysis could not be completed. Please try again.
+            <p className="mt-3 text-xs text-[var(--ds-text-tertiary)]">
+              This can take a few minutes. The report will appear here when it is ready.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                if (selected) void runAnalysis(selected);
-              }}
-              disabled={!selected}
-              className="btn-gradient mt-3"
-            >
-              Retry analysis
-            </button>
           </div>
         ) : null}
 
-        {status === 'report' && selected ? (
-          <div className="mt-5 space-y-4">
+        {status === 'report' && selected && report ? (
+          <div className="mt-6 space-y-4">
+            {existing ? (
+              <p className="text-xs text-[var(--ds-text-tertiary)]">
+                Showing the competitor analysis already saved for this run.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-surface-subtle)] p-4">
-              <CompanyLogo name={selected.name} logo={selected.logo} size="sm" />
+              <CompanyLogo name={selected.name} logo={selected.logo} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-[var(--ds-text-primary)]">{selected.name}</p>
-                <p className="text-xs text-[var(--ds-text-tertiary)]">
-                  {existing
-                    ? 'Saved competitor analysis from this run\u2019s history.'
-                    : [selected.industry, selected.location].filter(Boolean).join(' \u00b7 ')}
+                <p className="truncate text-lg font-semibold text-[var(--ds-text-primary)]">
+                  {selected.name}
                 </p>
+                {selected.description ? (
+                  <p className="line-clamp-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
+                    {selected.description}
+                  </p>
+                ) : null}
               </div>
               {formatFollowers(selected.followers_count) ? (
                 <span className="pill">{formatFollowers(selected.followers_count)}</span>
               ) : null}
-              {!existing ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReport(null);
-                    setStatus(companies.length > 0 ? 'results' : 'idle');
-                  }}
-                  className="btn-secondary"
+              {selected.profile_url ? (
+                <a
+                  href={selected.profile_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
                 >
-                  Back to results
-                </button>
+                  LinkedIn {'\u2197'}
+                </a>
               ) : null}
             </div>
-
-            {sections.length === 0 ? (
-              <p className="text-sm text-[var(--ds-text-secondary)]">
-                The analysis completed but returned no readable sections.
-              </p>
-            ) : null}
-
-            {sections.map(([k, v]) => {
-              const dot = k.indexOf('.');
-              const title =
-                dot > 0
-                  ? `${humanizeKey(k.slice(0, dot).replace(/agent$/, ''))} \u00b7 ${humanizeKey(k.slice(dot + 1))}`
-                  : humanizeKey(k);
-              return (
+            {sections.length > 0 ? (
+              sections.map(([k, v]) => (
                 <div
                   key={k}
                   className="rounded-xl border border-[var(--ds-border-default)] bg-white p-4"
                 >
-                  <h3 className="mb-3 text-base font-semibold text-[var(--ds-text-primary)]">
-                    {title}
+                  <h3 className="mb-3 text-sm font-semibold text-[var(--ds-text-primary)]">
+                    {humanizeKey(k.split('.').pop() ?? k)}
                   </h3>
                   <DataRenderer value={v} />
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              <p className="text-sm text-[var(--ds-text-secondary)]">
+                No detailed sections were returned for this competitor.
+              </p>
+            )}
           </div>
         ) : null}
       </div>

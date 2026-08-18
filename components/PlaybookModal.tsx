@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { decodeUnicodeEscapes } from '@/lib/format';
 import type { ArenaRunEntry, PlaybookContent, PlaybookSource } from '@/lib/types';
 
 interface PlaybookModalProps {
@@ -33,7 +34,7 @@ function renderInline(text: string, prefix: string): ReactNode[] {
 }
 
 function RichText({ text }: { text: string }) {
-  const lines = text.split(/\r?\n/);
+  const lines = decodeUnicodeEscapes(text).split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let bullets: string[] = [];
 
@@ -189,7 +190,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(44, 45, 51, 0.72)' }}
     >
-      <div className="ds-card max-h-[85vh] w-full max-w-3xl overflow-y-auto">
+      <div className="ds-card max-h-[85vh] w-full max-w-5xl overflow-y-auto">
         <div className="flex items-start justify-between gap-4">
           <div>
             <span className="ds-chip">Playbook</span>
@@ -260,7 +261,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           <div className="mt-6 space-y-6">
             {playbook.headline ? (
               <p className="text-lg font-semibold leading-7 text-[var(--ds-text-primary)]">
-                {playbook.headline}
+                {decodeUnicodeEscapes(playbook.headline)}
               </p>
             ) : null}
 
@@ -269,7 +270,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">Quick wins</h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
                   {playbook.quickWins.map((w, i) => (
-                    <li key={`qw-${i}`}>{w}</li>
+                    <li key={`qw-${i}`}>{decodeUnicodeEscapes(w)}</li>
                   ))}
                 </ul>
               </section>
@@ -294,7 +295,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 </div>
                 {playbook.currentVsTarget.rationale ? (
                   <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                    {playbook.currentVsTarget.rationale}
+                    {decodeUnicodeEscapes(playbook.currentVsTarget.rationale)}
                   </p>
                 ) : null}
               </section>
@@ -314,19 +315,21 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                       <div className="flex flex-wrap items-center gap-2">
                         {rec.area ? (
                           <span className="font-semibold text-[var(--ds-text-primary)]">
-                            {rec.area}
+                            {decodeUnicodeEscapes(rec.area)}
                           </span>
                         ) : null}
-                        {rec.priority ? <span className="ds-chip">{rec.priority}</span> : null}
+                        {rec.priority ? (
+                          <span className="ds-chip">{decodeUnicodeEscapes(rec.priority)}</span>
+                        ) : null}
                       </div>
                       {rec.action ? (
                         <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                          {rec.action}
+                          {decodeUnicodeEscapes(rec.action)}
                         </p>
                       ) : null}
                       {rec.impact ? (
-                        <p className="mt-2 text-xs leading-5 text-[var(--ds-text-tertiary)]">
-                          {rec.impact}
+                        <p className="mt-1 text-xs leading-5 text-[var(--ds-text-tertiary)]">
+                          Impact: {decodeUnicodeEscapes(rec.impact)}
                         </p>
                       ) : null}
                     </div>
@@ -337,10 +340,12 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
 
             {Array.isArray(playbook.gaps) && playbook.gaps.length > 0 ? (
               <section>
-                <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">Gaps</h3>
+                <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">
+                  Messaging gaps
+                </h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
                   {playbook.gaps.map((g, i) => (
-                    <li key={`gap-${i}`}>{g}</li>
+                    <li key={`gap-${i}`}>{decodeUnicodeEscapes(g)}</li>
                   ))}
                 </ul>
               </section>
@@ -358,16 +363,22 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                       className="rounded-xl border border-[var(--ds-border-default)] bg-white p-4"
                     >
                       {idea.name ? (
-                        <p className="font-semibold text-[var(--ds-text-primary)]">{idea.name}</p>
+                        <p className="font-semibold text-[var(--ds-text-primary)]">
+                          {decodeUnicodeEscapes(idea.name)}
+                        </p>
                       ) : null}
                       {idea.concept ? (
                         <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                          {idea.concept}
+                          {decodeUnicodeEscapes(idea.concept)}
                         </p>
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {idea.cadence ? <span className="pill">{idea.cadence}</span> : null}
-                        {idea.cta ? <span className="ds-chip">{idea.cta}</span> : null}
+                        {idea.cadence ? (
+                          <span className="pill">{decodeUnicodeEscapes(idea.cadence)}</span>
+                        ) : null}
+                        {idea.cta ? (
+                          <span className="ds-chip">{decodeUnicodeEscapes(idea.cta)}</span>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -380,7 +391,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">Activities</h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
                   {playbook.activities.map((a, i) => (
-                    <li key={`act-${i}`}>{a}</li>
+                    <li key={`act-${i}`}>{decodeUnicodeEscapes(a)}</li>
                   ))}
                 </ul>
               </section>
@@ -393,7 +404,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 </h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
                   {playbook.engagementPlays.map((p, i) => (
-                    <li key={`ep-${i}`}>{p}</li>
+                    <li key={`ep-${i}`}>{decodeUnicodeEscapes(p)}</li>
                   ))}
                 </ul>
               </section>
@@ -401,7 +412,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           </div>
         ) : null}
 
-        {!playbook && playbookText ? (
+        {playbookText ? (
           <div className="mt-6">
             <RichText text={playbookText} />
           </div>

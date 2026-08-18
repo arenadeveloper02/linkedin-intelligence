@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { decodeUnicodeEscapes } from '@/lib/format';
 import type { JsonValue } from '@/lib/types';
 
 type Rec = { [key: string]: JsonValue };
@@ -37,6 +39,45 @@ export function hasContent(value: JsonValue | null | undefined): boolean {
   if (typeof value === 'boolean') return true;
   if (Array.isArray(value)) return value.some((v) => hasContent(v));
   return Object.values(value).some((v) => hasContent(v));
+}
+
+function isUrl(s: string): boolean {
+  return /^https?:\/\/\S+$/i.test(s.trim());
+}
+
+function isImageUrl(s: string): boolean {
+  return isUrl(s) && /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)(\?.*)?(#.*)?$/i.test(s.trim());
+}
+
+/**
+ * Renders a string value: image URLs become inline images, other URLs become
+ * links, and everything else is plain text with Unicode escapes decoded.
+ */
+function renderString(raw: string): ReactNode {
+  const text = decodeUnicodeEscapes(raw);
+  const trimmed = text.trim();
+  if (isImageUrl(trimmed)) {
+    return (
+      <img
+        src={trimmed}
+        alt="Embedded content"
+        className="max-h-64 max-w-full rounded-lg border border-[var(--ds-border-default)] bg-white object-contain"
+      />
+    );
+  }
+  if (isUrl(trimmed)) {
+    return (
+      <a
+        href={trimmed}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="break-all font-medium text-[var(--ds-text-link)] hover:underline"
+      >
+        {trimmed}
+      </a>
+    );
+  }
+  return <>{text}</>;
 }
 
 interface LvItem {
@@ -100,8 +141,31 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
   if (value === null || value === undefined || !hasContent(value)) return null;
 
   if (typeof value === 'string') {
+    const text = decodeUnicodeEscapes(value);
+    const trimmed = text.trim();
+    if (isImageUrl(trimmed)) {
+      return (
+        <img
+          src={trimmed}
+          alt="Embedded content"
+          className="max-h-64 max-w-full rounded-lg border border-[var(--ds-border-default)] bg-white object-contain"
+        />
+      );
+    }
+    if (isUrl(trimmed)) {
+      return (
+        <a
+          href={trimmed}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+        >
+          {trimmed}
+        </a>
+      );
+    }
     return (
-      <p className="whitespace-pre-line text-sm leading-6 text-[var(--ds-text-secondary)]">{value}</p>
+      <p className="whitespace-pre-line text-sm leading-6 text-[var(--ds-text-secondary)]">{text}</p>
     );
   }
 
@@ -114,13 +178,13 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
     const strings = items.filter((v): v is string => typeof v === 'string');
 
     if (strings.length === items.length && strings.length > 0) {
-      const short = strings.every((s) => s.length <= 48);
+      const short = strings.every((s) => s.length <= 48 && !isUrl(s.trim()));
       if (short) {
         return (
           <div className="flex flex-wrap gap-2">
             {strings.map((s, i) => (
               <span key={`${i}-${s.slice(0, 12)}`} className="ds-chip">
-                {s}
+                {decodeUnicodeEscapes(s)}
               </span>
             ))}
           </div>
@@ -134,7 +198,7 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
               className="flex gap-2 text-sm leading-6 text-[var(--ds-text-secondary)]"
             >
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-brand)]" />
-              <span>{s}</span>
+              <span className="min-w-0">{renderString(s)}</span>
             </li>
           ))}
         </ul>
@@ -152,7 +216,9 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
             {rows.map((r) => (
               <div key={r.l}>
                 <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-medium text-[var(--ds-text-primary)]">{r.l}</span>
+                  <span className="font-medium text-[var(--ds-text-primary)]">
+                    {decodeUnicodeEscapes(r.l)}
+                  </span>
                   <span className="text-[var(--ds-text-secondary)]">{r.n}</span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-[var(--ds-grey-100)]">
@@ -177,9 +243,13 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
               className="rounded-lg border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-subtle)] p-3"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
-                {i.l}
+                {decodeUnicodeEscapes(i.l)}
               </p>
-              {typeof i.v === 'string' || typeof i.v === 'number' ? (
+              {typeof i.v === 'string' ? (
+                <div className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
+                  {renderString(i.v)}
+                </div>
+              ) : typeof i.v === 'number' ? (
                 <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">{String(i.v)}</p>
               ) : (
                 <div className="mt-1">
@@ -202,11 +272,15 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
               className="rounded-xl border border-[var(--ds-border-default)] bg-white p-4 shadow-[var(--ds-elevation-sm)]"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
-                {s.h}
+                {decodeUnicodeEscapes(s.h)}
               </p>
-              <p className="mt-1 text-xl font-semibold text-[var(--ds-text-primary)]">{s.v}</p>
+              <p className="mt-1 text-xl font-semibold text-[var(--ds-text-primary)]">
+                {decodeUnicodeEscapes(s.v)}
+              </p>
               {s.d ? (
-                <p className="mt-1 text-xs leading-5 text-[var(--ds-text-secondary)]">{s.d}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--ds-text-secondary)]">
+                  {decodeUnicodeEscapes(s.d)}
+                </p>
               ) : null}
             </div>
           ))}
@@ -225,11 +299,11 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
                   className="mr-1.5 inline-block h-3 w-3 rounded-full border border-[var(--ds-border-default)]"
                   style={{ background: p.a }}
                 />
-                {p.b}
+                {decodeUnicodeEscapes(p.b)}
               </span>
             ) : (
               <span key={`${idx}-${p.a.slice(0, 12)}`} className="ds-chip">
-                {p.a} \u00b7 {p.b}
+                {decodeUnicodeEscapes(p.a)} {'\u00b7'} {decodeUnicodeEscapes(p.b)}
               </span>
             ),
           )}
@@ -271,7 +345,9 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
               <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
                 {humanizeKey(k)}
               </span>
-              <span className="text-sm text-[var(--ds-text-primary)]">{String(v)}</span>
+              <span className="text-sm text-[var(--ds-text-primary)]">
+                {typeof v === 'string' ? renderString(v) : String(v)}
+              </span>
             </div>
           );
         }

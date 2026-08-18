@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import CompanyLogo from '@/components/CompanyLogo';
 import { DataRenderer, hasContent, humanizeKey } from '@/components/DataRenderer';
-import { formatCompact, formatDate, formatFollowers } from '@/lib/format';
+import { decodeUnicodeEscapes, formatCompact, formatDate, formatFollowers } from '@/lib/format';
 import type { AnalysisOutput, JsonValue, SelectedCompany } from '@/lib/types';
 
 interface ReportDashboardProps {
@@ -181,9 +181,10 @@ function KeyBlock({ output, k, title }: { output: AnalysisOutput; k: string; tit
 
 function CopyCard({ text, meta }: { text: string; meta: string | null }) {
   const [copied, setCopied] = useState(false);
+  const display = decodeUnicodeEscapes(text);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(display);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -195,10 +196,10 @@ function CopyCard({ text, meta }: { text: string; meta: string | null }) {
       <div className="min-w-0 flex-1">
         {meta ? (
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
-            {meta}
+            {decodeUnicodeEscapes(meta)}
           </p>
         ) : null}
-        <p className="text-sm leading-6 text-[var(--ds-text-primary)]">{text}</p>
+        <p className="text-sm leading-6 text-[var(--ds-text-primary)]">{display}</p>
       </div>
       <button
         type="button"
@@ -276,7 +277,9 @@ function PostCard({ post, rank }: { post: Rec; rank?: string }) {
         {type ? <span className="pill">{type}</span> : null}
       </div>
       {text ? (
-        <p className="line-clamp-4 text-sm leading-6 text-[var(--ds-text-secondary)]">{text}</p>
+        <p className="line-clamp-4 text-sm leading-6 text-[var(--ds-text-secondary)]">
+          {decodeUnicodeEscapes(text)}
+        </p>
       ) : (
         <p className="text-sm italic text-[var(--ds-text-tertiary)]">No caption available</p>
       )}
@@ -356,26 +359,13 @@ export default function ReportDashboard({
 
   const profileName = asString(pick(output, 'getcompanyprofile.name')) ?? company.companyName;
   const profileLogo = asString(pick(output, 'getcompanyprofile.logo')) ?? company.companyLogo;
-  const followers = asNum(pick(output, 'getcompanyprofile.followers_count')) ?? company.followers;
+  const followers =
+    asNum(pick(output, 'getcompanyprofile.followers_count')) ?? company.followers;
   const employees = asNum(pick(output, 'getcompanyprofile.employee_count'));
   const website = asString(pick(output, 'getcompanyprofile.website'));
   const profileUrl = asString(pick(output, 'getcompanyprofile.profile_url')) ?? company.profileUrl;
-  const profileDescription =
+  const description =
     asString(pick(output, 'getcompanyprofile.description')) ?? company.description;
-
-  const overallRaw = pick(output, 'competitiveagent.scorecardOverall');
-  const overallScore =
-    asNum(overallRaw) ??
-    (isRec(overallRaw)
-      ? asNum(overallRaw['score']) ??
-        asNum(overallRaw['overall']) ??
-        asNum(overallRaw['overallScore'])
-      : null);
-
-  const meta = [company.industry, company.location].filter(Boolean).join(' \u00b7 ');
-  const followersLabel = formatFollowers(followers);
-  const topPosts = sortedPosts.slice(0, 6);
-  const weakestPosts = sortedPosts.length > 3 ? sortedPosts.slice(-3).reverse() : [];
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -386,267 +376,187 @@ export default function ReportDashboard({
             onClick={onBack}
             className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
           >
-            &larr; Search another company
+            &larr; New analysis
           </button>
         ) : (
-          <Link
-            href="/"
-            className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
-          >
-            &larr; Search another company
+          <Link href="/" className="text-sm font-medium text-[var(--ds-text-link)] hover:underline">
+            &larr; New analysis
           </Link>
         )}
         {onRunCompetitor ? (
-          <button type="button" onClick={onRunCompetitor} className="btn-secondary">
-            Run Competitor Analysis
+          <button type="button" onClick={onRunCompetitor} className="btn-gradient">
+            Competitor Analysis
           </button>
         ) : null}
       </div>
 
-      <div className="ds-card mt-4">
-        <div className="flex flex-wrap items-start gap-4">
-          <CompanyLogo name={profileName} logo={profileLogo} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold text-[var(--ds-text-primary)]">{profileName}</h1>
-              <span className="ds-chip">
-                {company.analysisType === 'competitor' ? 'Competitor' : 'Own Brand'}
-              </span>
-            </div>
-            {meta ? (
-              <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">{meta}</p>
+      <div className="ds-card mt-4 flex flex-wrap items-center gap-4">
+        <CompanyLogo name={profileName} logo={profileLogo} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-[var(--ds-text-primary)]">{profileName}</h1>
+            <span className="ds-chip">
+              {company.analysisType === 'competitor'
+                ? 'Competitor Intelligence'
+                : 'Own Brand Intelligence'}
+            </span>
+          </div>
+          {description ? (
+            <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
+              {decodeUnicodeEscapes(description)}
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--ds-text-secondary)]">
+            {followers !== null ? <span className="pill">{formatFollowers(followers)}</span> : null}
+            {employees !== null ? (
+              <span className="pill">{formatCompact(employees)} employees</span>
             ) : null}
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              {followersLabel ? <span className="pill">{followersLabel}</span> : null}
-              {employees !== null ? (
-                <span className="pill">{formatCompact(employees)} employees</span>
-              ) : null}
-              {website ? (
-                <a
-                  href={website.startsWith('http') ? website : `https://${website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pill hover:text-[var(--ds-brand)]"
-                >
-                  Website {'\u2197'}
-                </a>
-              ) : null}
-              {profileUrl ? (
-                <a
-                  href={profileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pill hover:text-[var(--ds-brand)]"
-                >
-                  LinkedIn {'\u2197'}
-                </a>
-              ) : null}
-            </div>
+            {website ? (
+              <a
+                href={website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[var(--ds-text-link)] hover:underline"
+              >
+                Website {'\u2197'}
+              </a>
+            ) : null}
+            {profileUrl ? (
+              <a
+                href={profileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[var(--ds-text-link)] hover:underline"
+              >
+                LinkedIn profile {'\u2197'}
+              </a>
+            ) : null}
           </div>
         </div>
       </div>
 
-      <nav className="sticky top-16 z-30 -mx-2 mt-6 overflow-x-auto rounded-xl border border-[var(--ds-border-default)] bg-white/95 px-2 py-2 shadow-[var(--ds-elevation-sm)] backdrop-blur">
-        <div className="flex min-w-max gap-1">
+      {/* Section tabs — intentionally not sticky/fixed so they scroll with the page */}
+      <div className="mt-6 overflow-x-auto border-b border-[var(--ds-border-default)]">
+        <nav className="flex min-w-max gap-1">
           {SECTIONS.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => setSection(s.id)}
-              className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                 section === s.id
-                  ? 'bg-[var(--ds-brand-surface)] text-[var(--ds-brand)]'
-                  : 'text-[var(--ds-text-secondary)] hover:bg-[var(--ds-grey-100)] hover:text-[var(--ds-text-primary)]'
+                  ? 'border-[var(--ds-color-brand-default,#1A73E8)] text-[var(--ds-text-link)]'
+                  : 'border-transparent text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
               }`}
             >
               {s.label}
             </button>
           ))}
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {section === 'overview' ? (
-        <section className="mt-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {followers !== null ? (
-              <KpiTile label="LinkedIn Presence" value={formatCompact(followers)} sub="Followers" />
-            ) : null}
-            {posts.length > 0 ? (
-              <KpiTile label="Content Volume" value={String(posts.length)} sub="Posts analyzed" />
-            ) : null}
-            {posts.length > 0 ? (
-              <KpiTile
-                label="Engagement"
-                value={formatCompact(avgEngagement)}
-                sub="Average engagement per post"
-              />
-            ) : null}
-            {overallScore !== null ? (
-              <KpiTile
-                label="Competitive Position"
-                value={String(overallScore)}
-                sub="Overall competitive score"
-              />
-            ) : null}
+        <>
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <KpiTile
+              label="Followers"
+              value={followers !== null ? formatCompact(followers) : '\u2014'}
+            />
+            <KpiTile label="Posts analyzed" value={String(posts.length)} />
+            <KpiTile label="Avg engagement" value={formatCompact(avgEngagement)} sub="per post" />
+            <KpiTile label="Total reactions" value={formatCompact(totals.reactions)} />
           </div>
-          {profileDescription ? (
-            <div className="ds-card mt-6">
-              <h3 className="mb-3 text-base font-semibold text-[var(--ds-text-primary)]">
-                About {profileName}
-              </h3>
-              <p className="whitespace-pre-line text-sm leading-6 text-[var(--ds-text-secondary)]">
-                {profileDescription}
-              </p>
-            </div>
-          ) : null}
-          <KeyBlock output={output} k="messagingagent.summary" title="Executive Summary" />
-          <KeyBlock output={output} k="messagingagent.stats" title="Messaging Statistics" />
-        </section>
+          <KeyBlock output={output} k="messagingagent.summary" title="Executive summary" />
+          <KeyBlock output={output} k="messagingagent.company" title="Company snapshot" />
+          <KeyBlock output={output} k="messagingagent.stats" title="Key stats" />
+        </>
       ) : null}
 
       {section === 'messaging' ? (
-        <section className="mt-6">
-          <KeyBlock output={output} k="messagingagent.summary" title="Messaging Summary" />
-          <KeyBlock output={output} k="messagingagent.messaging" title="Messaging Intelligence" />
-          <KeyBlock output={output} k="messagingagent.company" title="Brand Narrative" />
-          <KeyBlock output={output} k="messagingagent.stats" title="Messaging Statistics" />
-        </section>
+        <>
+          <KeyBlock output={output} k="messagingagent.messaging" title="Messaging analysis" />
+          <LibraryBlock value={pick(output, 'strategyagent.hookLibrary')} title="Hook library" />
+          <LibraryBlock value={pick(output, 'strategyagent.ctaLibrary')} title="CTA library" />
+        </>
       ) : null}
 
       {section === 'content' ? (
-        <section className="mt-6">
-          <KeyBlock output={output} k="contentcreativeagent.content" title="Content Strategy" />
-          <KeyBlock
-            output={output}
-            k="contentcreativeagent.topicClusters"
-            title="Topic Clusters"
-          />
-        </section>
+        <>
+          <KeyBlock output={output} k="contentcreativeagent.content" title="Content analysis" />
+          <KeyBlock output={output} k="contentcreativeagent.topicClusters" title="Topic clusters" />
+        </>
       ) : null}
 
       {section === 'creative' ? (
-        <section className="mt-6">
-          <KeyBlock output={output} k="contentcreativeagent.creative" title="Creative Direction" />
-          <KeyBlock output={output} k="creativeinsightagent.imageryTypes" title="Imagery Types" />
-          <KeyBlock output={output} k="creativeinsightagent.textStyle" title="Text Style" />
-          <KeyBlock
-            output={output}
-            k="creativeinsightagent.observations"
-            title="Creative Observations"
-          />
+        <>
+          <KeyBlock output={output} k="contentcreativeagent.creative" title="Creative analysis" />
+          <KeyBlock output={output} k="creativeinsightagent.imageryTypes" title="Imagery types" />
+          <KeyBlock output={output} k="creativeinsightagent.textStyle" title="Text style" />
+          <KeyBlock output={output} k="creativeinsightagent.observations" title="Observations" />
           <KeyBlock
             output={output}
             k="creativeinsightagent.recommendations"
-            title="Creative Recommendations"
+            title="Creative recommendations"
           />
-        </section>
+        </>
       ) : null}
 
       {section === 'engagement' ? (
-        <section className="mt-6">
-          {posts.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiTile label="Reactions" value={formatCompact(totals.reactions)} />
-              <KpiTile label="Comments" value={formatCompact(totals.comments)} />
-              <KpiTile label="Reposts" value={formatCompact(totals.reposts)} />
-              <KpiTile label="Total Engagement" value={formatCompact(totals.total)} />
-            </div>
-          ) : null}
-          <KeyBlock
-            output={output}
-            k="contentcreativeagent.engagement"
-            title="Engagement Intelligence"
-          />
-          {topPosts.length > 0 ? (
-            <div className="ds-card mt-6">
-              <h3 className="mb-4 text-base font-semibold text-[var(--ds-text-primary)]">
-                Top Performing Posts
-              </h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                {topPosts.map((p, i) => (
-                  <PostCard key={i} post={p} rank={`#${i + 1}`} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {weakestPosts.length > 0 ? (
-            <div className="ds-card mt-6">
-              <h3 className="mb-4 text-base font-semibold text-[var(--ds-text-primary)]">
-                Weakest Posts
-              </h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                {weakestPosts.map((p, i) => (
-                  <PostCard key={i} post={p} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
+        <KeyBlock output={output} k="contentcreativeagent.engagement" title="Engagement analysis" />
       ) : null}
 
       {section === 'audience' ? (
-        <section className="mt-6">
-          <KeyBlock output={output} k="strategyagent.personas" title="Personas" />
-          <KeyBlock output={output} k="strategyagent.audienceDetail" title="Audience Detail" />
-        </section>
+        <>
+          <KeyBlock output={output} k="strategyagent.personas" title="Audience personas" />
+          <KeyBlock output={output} k="strategyagent.audienceDetail" title="Audience detail" />
+        </>
       ) : null}
 
       {section === 'strategy' ? (
-        <section className="mt-6">
-          <KeyBlock output={output} k="strategyagent.strategy" title="Strategic Playbook" />
-          <LibraryBlock value={pick(output, 'strategyagent.hookLibrary')} title="Hook Library" />
-          <LibraryBlock value={pick(output, 'strategyagent.ctaLibrary')} title="CTA Library" />
-        </section>
+        <KeyBlock output={output} k="strategyagent.strategy" title="Strategic recommendations" />
       ) : null}
 
       {section === 'competitive' ? (
-        <section className="mt-6">
-          {overallScore !== null ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <KpiTile
-                label="Competitive Position"
-                value={String(overallScore)}
-                sub="Overall scorecard"
-              />
-            </div>
-          ) : null}
-          <ScoreBars value={pick(output, 'competitiveagent.scorecard')} title="Scorecard" />
+        <>
+          <ScoreBars
+            value={pick(output, 'competitiveagent.scorecard')}
+            title="Competitive scorecard"
+          />
+          <KeyBlock output={output} k="competitiveagent.scorecardOverall" title="Overall score" />
           <KeyBlock
             output={output}
             k="competitiveagent.competitive"
-            title="Competitive Overview"
+            title="Competitive positioning"
           />
-          <KeyBlock output={output} k="competitiveagent.campaigns" title="Campaign Intelligence" />
-          <KeyBlock output={output} k="competitiveagent.launches" title="Launch Signals" />
+          <KeyBlock output={output} k="competitiveagent.campaigns" title="Campaigns" />
+          <KeyBlock output={output} k="competitiveagent.launches" title="Launches" />
           <KeyBlock
             output={output}
             k="competitiveagent.messagingEvolution"
-            title="Messaging Evolution"
+            title="Messaging evolution"
           />
           <KeyBlock
             output={output}
             k="competitiveagent.recommendations"
-            title="Competitive Recommendations"
+            title="Competitive recommendations"
           />
-        </section>
+        </>
       ) : null}
 
       {section === 'posts' ? (
-        <section className="mt-6">
-          {sortedPosts.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {sortedPosts.map((p, i) => (
-                <PostCard key={i} post={p} />
-              ))}
-            </div>
-          ) : (
-            <div className="ds-card text-center">
-              <p className="text-sm text-[var(--ds-text-secondary)]">
-                No posts were returned for this company.
-              </p>
-            </div>
-          )}
-        </section>
+        posts.length > 0 ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {sortedPosts.map((p, i) => (
+              <PostCard key={i} post={p} rank={i < 3 ? `Top #${i + 1}` : undefined} />
+            ))}
+          </div>
+        ) : (
+          <div className="ds-card mt-6 text-center">
+            <p className="text-sm text-[var(--ds-text-secondary)]">
+              No posts were collected for this company.
+            </p>
+          </div>
+        )
       ) : null}
     </main>
   );

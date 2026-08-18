@@ -21,3 +21,26 @@ export function formatDate(value: string | Date): string {
   if (Number.isNaN(d.getTime())) return typeof value === 'string' ? value : '';
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/**
+ * Decodes raw Unicode escape sequences (\uXXXX or \u{XXXXX}) that can arrive
+ * as literal text inside API responses or stored JSON, so the UI never shows
+ * sequences like \u00b7 to the user.
+ */
+export function decodeUnicodeEscapes(text: string): string {
+  if (!text.includes('\\u')) return text;
+  return text.replace(
+    /\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})/g,
+    (match, braced: string | undefined, plain: string | undefined) => {
+      const hex = braced ?? plain;
+      if (!hex) return match;
+      const code = Number.parseInt(hex, 16);
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match;
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return match;
+      }
+    },
+  );
+}

@@ -47,7 +47,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    background: linear-gradient(135deg, #2C2D33 0%, #41444C 100%);
+    background-color: rgb(26 115 232 / var(--tw-bg-opacity, 1));
     color: #fff;
     border-radius: var(--ds-radius-md, 12px);
     padding: 0.625rem 1.25rem;
@@ -81,8 +81,8 @@ body {
     justify-content: center;
     gap: 0.5rem;
     background: transparent;
-    color: #2C2D33;
-    border: 1px solid #2C2D33;
+    color: rgb(26 115 232 / var(--tw-bg-opacity, 1));
+    border: 1px solid rgb(26 115 232 / var(--tw-bg-opacity, 1));
     border-radius: var(--ds-radius-md, 12px);
     padding: 0.625rem 1.25rem;
     font-size: 0.875rem;
@@ -92,7 +92,7 @@ body {
       color 100ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: #2C2D33;
+    background: rgb(26 115 232 / var(--tw-bg-opacity, 1));
     color: #fff;
   }
   .btn-secondary:disabled {
