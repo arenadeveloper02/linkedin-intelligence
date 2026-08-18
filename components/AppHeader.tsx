@@ -1,25 +1,15 @@
 "use client"
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
-const NAV = [
-  { href: '/', label: 'Search' },
-  { href: '/history', label: 'History' },
-];
 
 export default function AppHeader() {
-  const pathname = usePathname();
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href);
-
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--ds-border-default)] bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+      <div className="mx-auto flex max-w-6xl items-center px-6 py-3">
         <Link href="/" className="flex items-center gap-3">
           <span
             className="flex h-10 w-10 items-center justify-center rounded-xl"
-            style={{ background: 'var(--ds-gradient-brand)' }}
+            style={{ background: 'linear-gradient(135deg, #2C2D33 0%, #41444C 100%)' }}
           >
             <svg
               viewBox="0 0 24 24"
@@ -45,21 +35,6 @@ export default function AppHeader() {
             </span>
           </span>
         </Link>
-        <nav className="flex items-center gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
-                isActive(item.href)
-                  ? 'bg-[var(--ds-brand-surface)] text-[var(--ds-brand)]'
-                  : 'text-[var(--ds-text-secondary)] hover:bg-[var(--ds-grey-100)] hover:text-[var(--ds-text-primary)]'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
       </div>
     </header>
   );

@@ -47,19 +47,66 @@ function parseWorkflowText(text: string): Record<string, unknown> {
   }
 
   const output: Record<string, unknown> = {};
+  let finalOutput: Record<string, unknown> | null = null;
+  const chunksByBlock: Record<string, string> = {};
+
   for (const line of trimmed.split('\n')) {
     const l = line.trim();
     if (!l.startsWith('data:')) continue;
     const body = l.slice(5).trim();
-    if (!body || body === '[DONE]') continue;
+    if (!body || body === '[DONE]' || body === '"[DONE]"') continue;
     try {
       const evt: unknown = JSON.parse(body);
-      if (isRecord(evt)) mergeEventOutput(evt, output);
+      if (!isRecord(evt)) continue;
+      // The streaming API delivers the complete, structured output in a final
+      // event: { event: 'final', data: { success, output: { <blockId>: {...} } } }.
+      // Always prefer this over intermediate chunk events.
+      if (evt.event === 'final' && isRecord(evt.data) && isRecord(evt.data.output)) {
+        finalOutput = evt.data.output as Record<string, unknown>;
+        continue;
+      }
+      // Intermediate streamed text chunks per block; accumulated as a fallback
+      // in case no final event is present in the stream.
+      if (typeof evt.blockId === 'string' && typeof evt.chunk === 'string') {
+        chunksByBlock[evt.blockId] = (chunksByBlock[evt.blockId] ?? '') + evt.chunk;
+        continue;
+      }
+      mergeEventOutput(evt, output);
     } catch {
       // ignore malformed event chunks
     }
   }
+
+  if (finalOutput) return { output: finalOutput };
+
+  if (Object.keys(output).length === 0) {
+    for (const [blockId, chunkText] of Object.entries(chunksByBlock)) {
+      const merged = parseChunkRecords(chunkText);
+      if (Object.keys(merged).length > 0) output[blockId] = merged;
+    }
+  }
   return { output };
+}
+
+/**
+ * Streamed chunks contain newline-separated JSON documents. Merge every
+ * top-level JSON object into a single record for the block; non-object
+ * documents (arrays / scalars) cannot be keyed reliably and are skipped
+ * in this fallback path.
+ */
+function parseChunkRecords(chunkText: string): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const line of chunkText.split('\n')) {
+    const doc = line.trim();
+    if (!doc) continue;
+    try {
+      const parsed: unknown = JSON.parse(doc);
+      if (isRecord(parsed)) Object.assign(merged, parsed);
+    } catch {
+      // ignore partial / malformed documents
+    }
+  }
+  return merged;
 }
 
 function mergeEventOutput(evt: Record<string, unknown>, output: Record<string, unknown>): void {

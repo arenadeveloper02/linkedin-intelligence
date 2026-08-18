@@ -1,21 +1,23 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-17T13:16:00.412Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-18T07:31:10.180Z.
 
 ## Overview
 
-LinkedIn Intelligence (Watchtower)
+LinkedIn Intelligence (Watchtower) — decode any company's LinkedIn playbook with messaging, content, creative, engagement, audience, and competitive intelligence.
 
 **Repository:** `linkedin-intelligence`  
 **File count:** 38
 
 ## Features
 
-- Company search with loading states
-- Own Brand LinkedIn intelligence analysis with normalized streaming output mapping
-- Dark-themed button system
-- Report dashboard with messaging, content, creative, engagement, audience, and competitive intelligence
-- Analysis history persisted per Arena email
+- Company search with loading skeletons
+- Own Brand analysis with staged progress loader (streaming response applied once complete)
+- Robust Arena streaming parser that prefers the final event output and falls back to accumulated block chunks
+- Smart data rendering for shorthand keys (l/v, h/v/d, keyword tuples, color swatches)
+- Dark-themed buttons with focus states
+- Brand-only header (Search/History nav removed)
+- Analysis history persisted per Arena email in Postgres
 
 ## Tech Stack
 
@@ -141,7 +143,7 @@ LinkedIn Intelligence (Watchtower)
 
 ## Latest Change
 
-- **Updated at:** 2026-08-17T13:16:00.412Z
+- **Updated at:** 2026-08-18T07:31:10.180Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 Changes to implement:
 0. Add loading whenever an api call happens, if it's streaming, then load the resposne once the streaming is complete.

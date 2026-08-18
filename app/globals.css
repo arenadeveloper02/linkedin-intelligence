@@ -64,9 +64,16 @@ body {
     transform: translateY(-1px);
     box-shadow: var(--ds-elevation-md, 0px 2px 8px rgba(44, 45, 51, 0.1));
   }
+  .btn-gradient:active:not(:disabled) {
+    transform: translateY(0);
+  }
   .btn-gradient:disabled {
     opacity: 0.38;
     cursor: not-allowed;
+  }
+  .btn-gradient:focus-visible {
+    outline: 2px solid var(--ds-color-focus-ring, rgba(26, 115, 232, 0.3));
+    outline-offset: 2px;
   }
   .btn-secondary {
     display: inline-flex;
@@ -91,6 +98,10 @@ body {
   .btn-secondary:disabled {
     opacity: 0.38;
     cursor: not-allowed;
+  }
+  .btn-secondary:focus-visible {
+    outline: 2px solid var(--ds-color-focus-ring, rgba(26, 115, 232, 0.3));
+    outline-offset: 2px;
   }
   .skeleton {
     border-radius: 8px;
