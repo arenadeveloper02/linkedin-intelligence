@@ -4,7 +4,7 @@ import { useState } from 'react';
 import CompanyLogo from '@/components/CompanyLogo';
 import { DataRenderer, hasContent, humanizeKey } from '@/components/DataRenderer';
 import { formatFollowers } from '@/lib/format';
-import type { AnalysisOutput, CompanyResult } from '@/lib/types';
+import type { AnalysisOutput, ArenaRunEntry, CompanyResult } from '@/lib/types';
 
 interface CompetitorModalProps {
   open: boolean;
@@ -27,6 +27,8 @@ type ModalStatus =
   | 'report'
   | 'analysis-error';
 
+const EXAMPLES = ['Position2', 'Sambanova', 'Stripe'];
+
 export default function CompetitorModal({ open, onClose, parentId }: CompetitorModalProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ModalStatus>('idle');
@@ -36,8 +38,8 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
 
   if (!open) return null;
 
-  const runSearch = async () => {
-    const term = query.trim();
+  const runSearch = async (termInput?: string) => {
+    const term = (termInput ?? query).trim();
     if (!term || status === 'searching') return;
     setStatus('searching');
     try {
@@ -59,12 +61,31 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
     }
   };
 
+  /**
+   * Resolves the parent (own-brand) run id to link the competitor run to.
+   * Prefers the `parentId` prop; when it is absent, falls back to the most
+   * recent run from the Arena history workflow.
+   */
+  const resolveParentId = async (): Promise<string> => {
+    if (parentId) return parentId;
+    try {
+      const res = await fetch('/api/arena-history');
+      if (!res.ok) return '';
+      const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+      const runs = Array.isArray(data.runs) ? data.runs : [];
+      return runs[0]?.id ?? '';
+    } catch {
+      return '';
+    }
+  };
+
   const runAnalysis = async (company: CompanyResult) => {
     if (status === 'analyzing') return;
     setSelected(company);
     setReport(null);
     setStatus('analyzing');
     try {
+      const effectiveParentId = await resolveParentId();
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,7 +93,7 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
           companyName: company.name,
           companyId: company.id,
           analysisType: 'competitor',
-          parentId: parentId ?? '',
+          parentId: effectiveParentId,
         }),
       });
       if (!res.ok) {
@@ -124,29 +145,48 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
         </div>
 
         {status !== 'analyzing' && status !== 'report' ? (
-          <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void runSearch();
-                }
-              }}
-              placeholder="Competitor company name"
-              disabled={status === 'searching'}
-              className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
-            />
-            <button
-              type="button"
-              onClick={() => void runSearch()}
-              disabled={status === 'searching' || !query.trim()}
-              className="btn-gradient shrink-0"
-            >
-              {status === 'searching' ? 'Searching\u2026' : 'Search'}
-            </button>
-          </div>
+          <>
+            <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void runSearch();
+                  }
+                }}
+                placeholder="Competitor company name"
+                disabled={status === 'searching'}
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => void runSearch()}
+                disabled={status === 'searching' || !query.trim()}
+                className="btn-gradient shrink-0"
+              >
+                {status === 'searching' ? 'Searching\u2026' : 'Search'}
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
+              {EXAMPLES.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={status === 'searching'}
+                  onClick={() => {
+                    setQuery(name);
+                    void runSearch(name);
+                  }}
+                  className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </>
         ) : null}
 
         {status === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}

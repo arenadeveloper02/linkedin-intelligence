@@ -83,21 +83,21 @@ export async function POST(req: NextRequest) {
 
   const email = (await getArenaEmailId()) ?? '';
 
+  // Per the workflow contract: OWN runs send type=OWN, isCompetitor=false and
+  // an empty id; COMPETITOR runs send type=COMPETITOR, isCompetitor=true and
+  // the id of the previous (own-brand) run so both runs are linked.
   const body: Record<string, unknown> = {
     companyName,
     companyId,
     email,
     type: analysisType === 'competitor' ? 'COMPETITOR' : 'OWN',
+    isCompetitor: analysisType === 'competitor',
+    id: analysisType === 'competitor' ? parentId : '',
     stream: true,
     selectedOutputs: OWN_BRAND_OUTPUTS,
     includeThinking: false,
     includeToolCalls: false,
   };
-
-  if (analysisType === 'competitor') {
-    body.isCompetitor = true;
-    if (parentId) body.id = parentId;
-  }
 
   try {
     const parsed = await executeWorkflow(workflowId, body);
