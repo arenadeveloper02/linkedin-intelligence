@@ -10,6 +10,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  return fenced ? fenced[1].trim() : trimmed;
+}
+
 export async function POST(req: NextRequest) {
   let payload: Record<string, unknown> = {};
   try {
@@ -22,7 +28,6 @@ export async function POST(req: NextRequest) {
   }
 
   const id = typeof payload.id === 'string' ? payload.id.trim() : '';
-  const source = payload.source === 'competitor' ? 'competitor' : 'own';
 
   if (!id) {
     return NextResponse.json({ error: 'Run id is required.' }, { status: 400 });
@@ -34,10 +39,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Payload matches the documented playbook workflow API exactly:
+    // { email, id, stream: false, selectedOutputs: ['playbookagent.content'], ... }
     const parsed = await executeWorkflow(PLAYBOOK_WORKFLOW_ID, {
       email,
       id,
-      type: source === 'competitor' ? 'COMPETITOR' : 'OWN',
       stream: false,
       selectedOutputs: ['playbookagent.content'],
       includeThinking: false,
@@ -47,21 +53,29 @@ export async function POST(req: NextRequest) {
     const contentRaw = output.content ?? output['playbookagent.content'];
 
     let playbook: PlaybookContent | null = null;
+    let playbookText: string | null = null;
+
     if (typeof contentRaw === 'string') {
+      const cleaned = stripCodeFences(contentRaw);
       try {
-        const p: unknown = JSON.parse(contentRaw);
+        const p: unknown = JSON.parse(cleaned);
         if (isRecord(p)) playbook = p as PlaybookContent;
+        else playbookText = cleaned;
       } catch {
-        playbook = null;
+        // Not strict JSON — return the raw content so the client renders it as rich text.
+        playbookText = cleaned;
       }
     } else if (isRecord(contentRaw)) {
       playbook = contentRaw as PlaybookContent;
     }
 
-    if (!playbook) {
-      return NextResponse.json({ error: 'Playbook could not be generated' }, { status: 502 });
+    if (playbook) {
+      return NextResponse.json({ playbook });
     }
-    return NextResponse.json({ playbook });
+    if (playbookText && playbookText.trim().length > 0) {
+      return NextResponse.json({ playbookText });
+    }
+    return NextResponse.json({ error: 'Playbook could not be generated' }, { status: 502 });
   } catch {
     return NextResponse.json({ error: 'Playbook could not be generated' }, { status: 502 });
   }

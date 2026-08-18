@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { PlaybookContent, PlaybookSource } from '@/lib/types';
 
 interface PlaybookModalProps {
@@ -12,10 +13,77 @@ interface PlaybookModalProps {
 
 type ModalStatus = 'idle' | 'loading' | 'error' | 'done';
 
+function renderInline(text: string, prefix: string): ReactNode[] {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={`${prefix}-b-${i}`} className="font-semibold text-[var(--ds-text-primary)]">
+        {part}
+      </strong>
+    ) : (
+      <span key={`${prefix}-t-${i}`}>{part}</span>
+    ),
+  );
+}
+
+function RichText({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let bullets: string[] = [];
+
+  const flush = (key: string) => {
+    if (bullets.length === 0) return;
+    const items = bullets;
+    bullets = [];
+    blocks.push(
+      <ul
+        key={key}
+        className="list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]"
+      >
+        {items.map((item, i) => (
+          <li key={`${key}-${i}`}>{renderInline(item, `${key}-${i}`)}</li>
+        ))}
+      </ul>,
+    );
+  };
+
+  lines.forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) {
+      flush(`ul-${idx}`);
+      return;
+    }
+    const bullet = line.match(/^[-*\u2022]\s+(.*)$/) ?? line.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet) {
+      bullets.push(bullet[1]);
+      return;
+    }
+    flush(`ul-${idx}`);
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      blocks.push(
+        <h3 key={`h-${idx}`} className="text-base font-semibold text-[var(--ds-text-primary)]">
+          {renderInline(heading[1], `h-${idx}`)}
+        </h3>,
+      );
+      return;
+    }
+    blocks.push(
+      <p key={`p-${idx}`} className="text-sm leading-6 text-[var(--ds-text-secondary)]">
+        {renderInline(line, `p-${idx}`)}
+      </p>,
+    );
+  });
+  flush('ul-end');
+
+  return <div className="space-y-3">{blocks}</div>;
+}
+
 export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: PlaybookModalProps) {
   const [source, setSource] = useState<PlaybookSource>('own');
   const [status, setStatus] = useState<ModalStatus>('idle');
   const [playbook, setPlaybook] = useState<PlaybookContent | null>(null);
+  const [playbookText, setPlaybookText] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -23,6 +91,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
     if (!runId || status === 'loading') return;
     setStatus('loading');
     setPlaybook(null);
+    setPlaybookText(null);
     try {
       const res = await fetch('/api/playbook', {
         method: 'POST',
@@ -33,13 +102,18 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
         setStatus('error');
         return;
       }
-      const data = (await res.json()) as { playbook?: PlaybookContent };
-      if (!data.playbook) {
-        setStatus('error');
+      const data = (await res.json()) as { playbook?: PlaybookContent; playbookText?: string };
+      if (data.playbook) {
+        setPlaybook(data.playbook);
+        setStatus('done');
         return;
       }
-      setPlaybook(data.playbook);
-      setStatus('done');
+      if (typeof data.playbookText === 'string' && data.playbookText.trim().length > 0) {
+        setPlaybookText(data.playbookText);
+        setStatus('done');
+        return;
+      }
+      setStatus('error');
     } catch {
       setStatus('error');
     }
@@ -259,6 +333,12 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                 </ul>
               </section>
             ) : null}
+          </div>
+        ) : null}
+
+        {!playbook && playbookText ? (
+          <div className="mt-6">
+            <RichText text={playbookText} />
           </div>
         ) : null}
       </div>
