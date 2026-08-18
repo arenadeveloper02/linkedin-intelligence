@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import CompanyLogo from '@/components/CompanyLogo';
 import { DataRenderer, hasContent, humanizeKey } from '@/components/DataRenderer';
 import { formatFollowers } from '@/lib/format';
@@ -29,12 +29,73 @@ type ModalStatus =
 
 const EXAMPLES = ['Position2', 'Sambanova', 'Stripe'];
 
+function outStr(output: AnalysisOutput, key: string): string | null {
+  const v = output[key];
+  return typeof v === 'string' && v.trim().length > 0 ? v : null;
+}
+
+function outNum(output: AnalysisOutput, key: string): number | null {
+  const v = output[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 export default function CompetitorModal({ open, onClose, parentId }: CompetitorModalProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ModalStatus>('idle');
   const [companies, setCompanies] = useState<CompanyResult[]>([]);
   const [selected, setSelected] = useState<CompanyResult | null>(null);
   const [report, setReport] = useState<AnalysisOutput | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [existing, setExisting] = useState(false);
+
+  // When the modal opens, check the Arena history for the linked run. If the
+  // run already has competitor data, show that data instead of the
+  // "Analyze a competitor" search flow.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setChecking(true);
+    const load = async () => {
+      try {
+        const res = await fetch('/api/arena-history');
+        if (!res.ok) return;
+        const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+        const runs = Array.isArray(data.runs) ? data.runs : [];
+        const run = parentId ? runs.find((r) => r.id === parentId) : runs[0];
+        if (!run || cancelled) return;
+        const compOut = run.competitorOutput;
+        if (!compOut || Object.keys(compOut).length === 0) return;
+        const idRaw = compOut['getcompanyprofile.id'];
+        const company: CompanyResult = {
+          id: typeof idRaw === 'string' ? idRaw : typeof idRaw === 'number' ? String(idRaw) : '',
+          name: outStr(compOut, 'getcompanyprofile.name') ?? 'Competitor',
+          logo: outStr(compOut, 'getcompanyprofile.logo'),
+          industry: null,
+          location: null,
+          description: outStr(compOut, 'getcompanyprofile.description'),
+          summary: null,
+          followers_count: outNum(compOut, 'getcompanyprofile.followers_count'),
+          profile_url: outStr(compOut, 'getcompanyprofile.profile_url'),
+          website: outStr(compOut, 'getcompanyprofile.website'),
+        };
+        if (cancelled) return;
+        setSelected(company);
+        setReport(compOut);
+        setExisting(true);
+        setStatus('report');
+      } catch {
+        // ignore — the search flow remains available
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, parentId]);
 
   if (!open) return null;
 
@@ -83,6 +144,7 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
     if (status === 'analyzing') return;
     setSelected(company);
     setReport(null);
+    setExisting(false);
     setStatus('analyzing');
     try {
       const effectiveParentId = await resolveParentId();
@@ -136,7 +198,9 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
             <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
               {status === 'report' || status === 'analyzing'
                 ? 'The competitor intelligence stays inside this panel and does not replace your main report.'
-                : 'Search for a competitor\u2019s LinkedIn company page, pick the right match, and Watchtower will run the same intelligence analysis linked to this report.'}
+                : checking
+                  ? 'Checking this run for saved competitor intelligence\u2026'
+                  : 'Search for a competitor\u2019s LinkedIn company page, pick the right match, and Watchtower will run the same intelligence analysis linked to this report.'}
             </p>
           </div>
           <button type="button" onClick={onClose} className="btn-secondary shrink-0">
@@ -144,7 +208,7 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
           </button>
         </div>
 
-        {status !== 'analyzing' && status !== 'report' ? (
+        {status !== 'analyzing' && status !== 'report' && !checking ? (
           <>
             <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2">
               <input
@@ -187,6 +251,10 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
               ))}
             </div>
           </>
+        ) : null}
+
+        {checking && status !== 'analyzing' && status !== 'report' ? (
+          <div className="progress-indeterminate mt-4" />
         ) : null}
 
         {status === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}
@@ -275,22 +343,26 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-[var(--ds-text-primary)]">{selected.name}</p>
                 <p className="text-xs text-[var(--ds-text-tertiary)]">
-                  {[selected.industry, selected.location].filter(Boolean).join(' \u00b7 ')}
+                  {existing
+                    ? 'Saved competitor analysis from this run\u2019s history.'
+                    : [selected.industry, selected.location].filter(Boolean).join(' \u00b7 ')}
                 </p>
               </div>
               {formatFollowers(selected.followers_count) ? (
                 <span className="pill">{formatFollowers(selected.followers_count)}</span>
               ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  setReport(null);
-                  setStatus(companies.length > 0 ? 'results' : 'idle');
-                }}
-                className="btn-secondary"
-              >
-                Back to results
-              </button>
+              {!existing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReport(null);
+                    setStatus(companies.length > 0 ? 'results' : 'idle');
+                  }}
+                  className="btn-secondary"
+                >
+                  Back to results
+                </button>
+              ) : null}
             </div>
 
             {sections.length === 0 ? (
@@ -306,13 +378,15 @@ export default function CompetitorModal({ open, onClose, parentId }: CompetitorM
                   ? `${humanizeKey(k.slice(0, dot).replace(/agent$/, ''))} \u00b7 ${humanizeKey(k.slice(dot + 1))}`
                   : humanizeKey(k);
               return (
-                <section
+                <div
                   key={k}
                   className="rounded-xl border border-[var(--ds-border-default)] bg-white p-4"
                 >
-                  <h3 className="mb-3 text-sm font-semibold text-[var(--ds-text-primary)]">{title}</h3>
+                  <h3 className="mb-3 text-base font-semibold text-[var(--ds-text-primary)]">
+                    {title}
+                  </h3>
                   <DataRenderer value={v} />
-                </section>
+                </div>
               );
             })}
           </div>

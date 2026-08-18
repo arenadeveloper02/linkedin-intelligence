@@ -94,6 +94,10 @@ export interface ArenaRunEntry {
   type: string;
   hasCompetitor: boolean;
   output: AnalysisOutput;
+  /** Saved playbook summary for this run (raw text or JSON string), when already generated. */
+  summary?: string | null;
+  /** Saved competitor analysis output (namespaced) for this run, when a competitor analysis exists. */
+  competitorOutput?: AnalysisOutput | null;
 }
 
 export type PlaybookSource = 'own' | 'competitor';

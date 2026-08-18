@@ -58,6 +58,11 @@ export async function GET() {
         type: typeof r.type === 'string' ? r.type : 'OWN_BRANDING',
         hasCompetitor: isRecord(comp) && Object.keys(comp).length > 0,
         output: namespaceHistoryOutput(out) as AnalysisOutput,
+        summary: typeof r.summary === 'string' && r.summary.trim() ? r.summary : null,
+        competitorOutput:
+          isRecord(comp) && Object.keys(comp).length > 0
+            ? (namespaceHistoryOutput(comp) as AnalysisOutput)
+            : null,
       });
     }
 

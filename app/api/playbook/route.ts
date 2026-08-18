@@ -50,7 +50,13 @@ export async function POST(req: NextRequest) {
       includeToolCalls: false,
     });
     const output = extractOutput(parsed);
-    const contentRaw = output.content ?? output['playbookagent.content'];
+    // The workflow may return the content at output.content, under the
+    // namespaced key, or nested inside a playbookagent block — map all three.
+    const agentBlock = output.playbookagent;
+    const contentRaw =
+      output.content ??
+      output['playbookagent.content'] ??
+      (isRecord(agentBlock) ? agentBlock.content : undefined);
 
     let playbook: PlaybookContent | null = null;
     let playbookText: string | null = null;

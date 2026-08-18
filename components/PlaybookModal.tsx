@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { PlaybookContent, PlaybookSource } from '@/lib/types';
+import type { ArenaRunEntry, PlaybookContent, PlaybookSource } from '@/lib/types';
 
 interface PlaybookModalProps {
   open: boolean;
@@ -12,6 +12,12 @@ interface PlaybookModalProps {
 }
 
 type ModalStatus = 'idle' | 'loading' | 'error' | 'done';
+
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  return fenced ? fenced[1].trim() : trimmed;
+}
 
 function renderInline(text: string, prefix: string): ReactNode[] {
   const parts = text.split(/\*\*(.+?)\*\*/g);
@@ -84,6 +90,56 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
   const [status, setStatus] = useState<ModalStatus>('idle');
   const [playbook, setPlaybook] = useState<PlaybookContent | null>(null);
   const [playbookText, setPlaybookText] = useState<string | null>(null);
+  const [hasExisting, setHasExisting] = useState(false);
+  const [runHasCompetitor, setRunHasCompetitor] = useState(false);
+  const [prefetching, setPrefetching] = useState(false);
+
+  // When the modal opens, check the Arena history for this run. If a playbook
+  // summary was already generated, show it directly and skip the playbook API.
+  useEffect(() => {
+    if (!open || !runId) return;
+    let cancelled = false;
+    setPrefetching(true);
+    const load = async () => {
+      try {
+        const res = await fetch('/api/arena-history');
+        if (!res.ok) return;
+        const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+        const runs = Array.isArray(data.runs) ? data.runs : [];
+        const run = runs.find((r) => r.id === runId);
+        if (!run || cancelled) return;
+        if (run.hasCompetitor) setRunHasCompetitor(true);
+        const summary = typeof run.summary === 'string' ? run.summary.trim() : '';
+        if (!summary) return;
+        const cleaned = stripCodeFences(summary);
+        let parsedPlaybook: PlaybookContent | null = null;
+        let parsedText: string | null = null;
+        try {
+          const parsed: unknown = JSON.parse(cleaned);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            parsedPlaybook = parsed as PlaybookContent;
+          } else {
+            parsedText = cleaned;
+          }
+        } catch {
+          parsedText = cleaned;
+        }
+        if (cancelled) return;
+        setPlaybook(parsedPlaybook);
+        setPlaybookText(parsedText);
+        setHasExisting(true);
+        setStatus('done');
+      } catch {
+        // ignore — generation stays available via the button
+      } finally {
+        if (!cancelled) setPrefetching(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, runId]);
 
   if (!open) return null;
 
@@ -119,6 +175,8 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
     }
   };
 
+  const showCompetitorRadio = hasCompetitor || runHasCompetitor;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -129,10 +187,12 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           <div>
             <span className="ds-chip">Playbook</span>
             <h2 className="mt-2 text-xl font-semibold text-[var(--ds-text-primary)]">
-              Generate a strategic playbook
+              {hasExisting ? 'Strategic playbook' : 'Generate a strategic playbook'}
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
-              Choose which analysis the playbook should be based on.
+              {hasExisting
+                ? 'This playbook was already generated for this analysis run.'
+                : 'Choose which analysis the playbook should be based on.'}
             </p>
           </div>
           <button type="button" onClick={onClose} className="btn-secondary shrink-0">
@@ -140,42 +200,46 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           </button>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-6">
-          <label className="flex items-center gap-2 text-sm font-medium text-[var(--ds-text-primary)]">
-            <input
-              type="radio"
-              name="playbook-source"
-              checked={source === 'own'}
-              onChange={() => setSource('own')}
-            />
-            Own Brand
-          </label>
-          {hasCompetitor ? (
+        {!hasExisting ? (
+          <div className="mt-5 flex flex-wrap items-center gap-6">
             <label className="flex items-center gap-2 text-sm font-medium text-[var(--ds-text-primary)]">
               <input
                 type="radio"
                 name="playbook-source"
-                checked={source === 'competitor'}
-                onChange={() => setSource('competitor')}
+                checked={source === 'own'}
+                onChange={() => setSource('own')}
               />
-              Competitor
+              Own Brand
             </label>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void generate()}
-            disabled={!runId || status === 'loading'}
-            className="btn-gradient ml-auto"
-          >
-            {status === 'loading' ? 'Generating playbook\u2026' : 'Playbook'}
-          </button>
-        </div>
+            {showCompetitorRadio ? (
+              <label className="flex items-center gap-2 text-sm font-medium text-[var(--ds-text-primary)]">
+                <input
+                  type="radio"
+                  name="playbook-source"
+                  checked={source === 'competitor'}
+                  onChange={() => setSource('competitor')}
+                />
+                Competitor
+              </label>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void generate()}
+              disabled={!runId || status === 'loading' || prefetching}
+              className="btn-gradient ml-auto"
+            >
+              {status === 'loading' ? 'Generating playbook\u2026' : 'Playbook'}
+            </button>
+          </div>
+        ) : null}
 
         {!runId ? (
           <p className="mt-3 text-xs text-[var(--ds-text-tertiary)]">
             The playbook becomes available once this analysis run has been saved to your history.
           </p>
         ) : null}
+
+        {prefetching ? <div className="progress-indeterminate mt-5" /> : null}
 
         {status === 'loading' ? <div className="progress-indeterminate mt-5" /> : null}
 
@@ -327,8 +391,8 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
                   Engagement plays
                 </h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                  {playbook.engagementPlays.map((p, i) => (
-                    <li key={`play-${i}`}>{p}</li>
+                  {playbook.engagementPlays.map((e, i) => (
+                    <li key={`ep-${i}`}>{e}</li>
                   ))}
                 </ul>
               </section>
@@ -336,7 +400,7 @@ export default function PlaybookModal({ open, onClose, runId, hasCompetitor }: P
           </div>
         ) : null}
 
-        {!playbook && playbookText ? (
+        {playbookText ? (
           <div className="mt-6">
             <RichText text={playbookText} />
           </div>
