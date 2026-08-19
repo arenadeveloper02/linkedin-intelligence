@@ -24,8 +24,9 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
   const [existing, setExisting] = useState<PlaybookResult | null>(null);
   const [prefetching, setPrefetching] = useState(false);
 
-  // When the modal opens, check the Arena history for this run. If a playbook
-  // summary was already generated, reuse it instead of calling the playbook API.
+  // When the modal opens, fetch ONLY this run via the single-run Arena
+  // workflow (instead of loading the whole history). If a playbook summary
+  // was already generated, reuse it instead of calling the playbook API.
   useEffect(() => {
     if (!open || !runId) return;
     let cancelled = false;
@@ -33,11 +34,15 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
     setPrefetching(true);
     const load = async () => {
       try {
-        const res = await fetch('/api/arena-history');
+        const res = await fetch('/api/arena-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: runId }),
+        });
         if (!res.ok) return;
         const data = (await res.json()) as { runs?: ArenaRunEntry[] };
         const runs = Array.isArray(data.runs) ? data.runs : [];
-        const run = runs.find((r) => r.id === runId);
+        const run = runs.find((r) => r.id === runId) ?? runs[0];
         if (!run || cancelled) return;
         const summary = typeof run.summary === 'string' ? run.summary.trim() : '';
         if (!summary) return;

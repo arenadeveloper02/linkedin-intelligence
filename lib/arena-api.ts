@@ -8,6 +8,8 @@ export const SEARCH_WORKFLOW_ID = 'c821b89f-5f32-44b3-9cc6-c0eea5b72b36';
 
 export const HISTORY_WORKFLOW_ID = 'bc8877bb-bdda-445f-a1a0-9eb1709af4b6';
 
+export const RUN_WORKFLOW_ID = 'ef016dc1-4a08-4c1b-b5e4-69080ea7c22d';
+
 export const PLAYBOOK_WORKFLOW_ID = '00bfdfb5-3726-4a32-a130-1eeb51d6a238';
 
 export const analysisWorkflows: { ownBrand: string; competitor: string | null } = {

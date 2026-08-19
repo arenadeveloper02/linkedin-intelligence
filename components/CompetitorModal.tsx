@@ -55,9 +55,10 @@ export default function CompetitorModal({
   const [existingOutput, setExistingOutput] = useState<AnalysisOutput | null>(null);
   const [checking, setChecking] = useState(false);
 
-  // When the modal opens, check the Arena history for this run. If a
-  // competitor analysis was already generated, show its details with an
-  // option to open it on the main screen.
+  // When the modal opens, fetch ONLY this run via the single-run Arena
+  // workflow (instead of loading the whole history). If a competitor analysis
+  // was already generated, show its details with an option to open it on the
+  // main screen.
   useEffect(() => {
     if (!open || !runId) return;
     let cancelled = false;
@@ -65,11 +66,15 @@ export default function CompetitorModal({
     setChecking(true);
     const load = async () => {
       try {
-        const res = await fetch('/api/arena-history');
+        const res = await fetch('/api/arena-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: runId }),
+        });
         if (!res.ok) return;
         const data = (await res.json()) as { runs?: ArenaRunEntry[] };
         const runs = Array.isArray(data.runs) ? data.runs : [];
-        const run = runs.find((r) => r.id === runId);
+        const run = runs.find((r) => r.id === runId) ?? runs[0];
         if (!run || cancelled) return;
         const out = run.competitorOutput;
         if (
