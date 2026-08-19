@@ -46,7 +46,12 @@ function isUrl(s: string): boolean {
 }
 
 function isImageUrl(s: string): boolean {
-  return isUrl(s) && /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)(\?.*)?(#.*)?$/i.test(s.trim());
+  if (!isUrl(s)) return false;
+  const t = s.trim();
+  return (
+    /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)(\?.*)?(#.*)?$/i.test(t) ||
+    /media\.licdn\.com/i.test(t)
+  );
 }
 
 /**
@@ -335,6 +340,20 @@ export function DataRenderer({ value, depth = 0 }: DataRendererProps) {
   return (
     <div className="space-y-4">
       {entries.map(([k, v]) => {
+        if (typeof v === 'string' && /logo/i.test(k) && isUrl(v.trim())) {
+          return (
+            <div key={k} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
+                {humanizeKey(k)}
+              </span>
+              <img
+                src={v.trim()}
+                alt={humanizeKey(k)}
+                className="h-12 w-12 rounded-xl border border-[var(--ds-border-default)] bg-white object-cover"
+              />
+            </div>
+          );
+        }
         if (
           typeof v === 'number' ||
           typeof v === 'boolean' ||

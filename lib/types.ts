@@ -132,3 +132,9 @@ export interface PlaybookContent {
   activities?: string[];
   engagementPlays?: string[];
 }
+
+/** The generated (or previously saved) playbook payload shown on the main screen. */
+export interface PlaybookResult {
+  playbook: PlaybookContent | null;
+  playbookText: string | null;
+}

@@ -6,6 +6,7 @@ import CompanyLogo from '@/components/CompanyLogo';
 import CompanyResults from '@/components/CompanyResults';
 import CompetitorModal from '@/components/CompetitorModal';
 import PlaybookModal from '@/components/PlaybookModal';
+import PlaybookView from '@/components/PlaybookView';
 import ReportDashboard from '@/components/ReportDashboard';
 import { saveAnalysis } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
@@ -14,6 +15,7 @@ import type {
   ArenaRunEntry,
   CompanyResult,
   JsonValue,
+  PlaybookResult,
   SelectedCompany,
 } from '@/lib/types';
 
@@ -27,6 +29,7 @@ type View =
   | 'analysis-error'
   | 'competitor-unavailable'
   | 'report'
+  | 'playbook'
   | 'history';
 
 const EXAMPLES = ['Position2', 'Sambanova', 'Stripe'];
@@ -48,6 +51,15 @@ const INFO_CARDS = [
     icon: 'M9 12l2 2 4-5M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z',
   },
 ];
+
+/** Snapshot of the initial (own-brand) report so the user can navigate back
+ *  to it after viewing a competitor comparison on the main screen. */
+interface OwnReportSnapshot {
+  company: SelectedCompany;
+  report: AnalysisOutput;
+  runId: string | null;
+  hasCompetitor: boolean;
+}
 
 function summaryPreview(run: ArenaRunEntry): string | null {
   const s: JsonValue | undefined = run.output['messagingagent.summary'];
@@ -77,6 +89,11 @@ export default function SearchClient() {
   );
   const [showCompetitorModal, setShowCompetitorModal] = useState(false);
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
+  // Snapshot of the initial output so the competitor comparison (shown on the
+  // main screen) offers a back option to the original report.
+  const [ownSnapshot, setOwnSnapshot] = useState<OwnReportSnapshot | null>(null);
+  // Playbook result shown on the main screen with a back option to the report.
+  const [playbookResult, setPlaybookResult] = useState<PlaybookResult | null>(null);
 
   const runSearch = async () => {
     const term = query.trim();
@@ -168,6 +185,8 @@ export default function SearchClient() {
 
   const handleAnalyze = (c: CompanyResult) => {
     if (!c.id) return;
+    setOwnSnapshot(null);
+    setPlaybookResult(null);
     void runAnalysis({
       companyName: c.name,
       companyId: c.id,
@@ -183,6 +202,11 @@ export default function SearchClient() {
 
   const handleCompetitorSelect = (c: CompanyResult) => {
     if (!c.id) return;
+    // Snapshot the initial output so the user can navigate back to it after
+    // the comparison renders on the main screen.
+    if (selected && report) {
+      setOwnSnapshot({ company: selected, report, runId, hasCompetitor });
+    }
     setShowCompetitorModal(false);
     void runAnalysis(
       {
@@ -198,6 +222,22 @@ export default function SearchClient() {
       },
       runId,
     );
+  };
+
+  const backToOwnReport = () => {
+    if (!ownSnapshot) return;
+    setSelected(ownSnapshot.company);
+    setReport(ownSnapshot.report);
+    setRunId(ownSnapshot.runId);
+    setHasCompetitor(ownSnapshot.hasCompetitor);
+    setOwnSnapshot(null);
+    setView('report');
+  };
+
+  const handlePlaybookResult = (result: PlaybookResult) => {
+    setPlaybookResult(result);
+    setShowPlaybookModal(false);
+    setView('playbook');
   };
 
   const openHistory = () => {
@@ -234,6 +274,8 @@ export default function SearchClient() {
     setReport(run.output);
     setRunId(run.id);
     setHasCompetitor(run.hasCompetitor);
+    setOwnSnapshot(null);
+    setPlaybookResult(null);
     setShowCompetitorModal(false);
     setShowPlaybookModal(false);
     setView('report');
@@ -245,6 +287,8 @@ export default function SearchClient() {
     setReport(null);
     setRunId(null);
     setHasCompetitor(false);
+    setOwnSnapshot(null);
+    setPlaybookResult(null);
     setShowCompetitorModal(false);
     setShowPlaybookModal(false);
   };
@@ -259,36 +303,77 @@ export default function SearchClient() {
     return <AnalysisProgress company={selected} />;
   }
 
+  if (view === 'playbook' && playbookResult) {
+    return (
+      <main className="mx-auto max-w-4xl px-6 py-10">
+        <button
+          type="button"
+          onClick={() => setView('report')}
+          className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+        >
+          &larr; Back to report
+        </button>
+        <p className="mt-6 text-xs font-semibold tracking-[0.2em] text-[var(--ds-text-tertiary)]">
+          PLAYBOOK
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--ds-text-primary)]">
+          Strategic playbook{selected ? ` \u00b7 ${selected.companyName}` : ''}
+        </h1>
+        <div className="ds-card mt-6">
+          <PlaybookView
+            playbook={playbookResult.playbook}
+            playbookText={playbookResult.playbookText}
+          />
+        </div>
+      </main>
+    );
+  }
+
   if (view === 'report' && selected && report) {
+    const isCompetitorReport = selected.analysisType === 'competitor' && ownSnapshot !== null;
     return (
       <>
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-3 px-6 pt-6">
-          <button
-            type="button"
-            onClick={() => setShowPlaybookModal(true)}
-            className="btn-secondary"
-          >
-            Playbook
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCompetitorModal(true)}
-            className="btn-gradient"
-          >
-            Competitor Analysis
-          </button>
-        </div>
-        <ReportDashboard company={selected} output={report} onBack={resetToSearch} />
+        {isCompetitorReport ? (
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6 pt-6">
+            <button type="button" onClick={backToOwnReport} className="btn-secondary">
+              &larr; Back to your report
+            </button>
+            <span className="ds-chip">Comparison report</span>
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-3 px-6 pt-6">
+            <button
+              type="button"
+              onClick={() => setShowPlaybookModal(true)}
+              className="btn-secondary"
+            >
+              Get the playbook
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCompetitorModal(true)}
+              className="btn-gradient"
+            >
+              Compare with another
+            </button>
+          </div>
+        )}
+        <ReportDashboard
+          company={selected}
+          output={report}
+          onBack={isCompetitorReport ? backToOwnReport : resetToSearch}
+        />
         <CompetitorModal
           open={showCompetitorModal}
           onClose={() => setShowCompetitorModal(false)}
           onSelect={handleCompetitorSelect}
+          company={selected}
         />
         <PlaybookModal
           open={showPlaybookModal}
           onClose={() => setShowPlaybookModal(false)}
           runId={runId}
-          hasCompetitor={hasCompetitor}
+          onResult={handlePlaybookResult}
         />
       </>
     );
@@ -325,7 +410,7 @@ export default function SearchClient() {
     return (
       <main className="mx-auto max-w-xl px-6 py-16">
         <div className="ds-card text-center">
-          <span className="ds-chip">Competitor Analysis</span>
+          <span className="ds-chip">Compare with another</span>
           <h2 className="mt-3 text-lg font-semibold text-[var(--ds-text-primary)]">
             Competitor analysis workflow is not configured yet.
           </h2>
@@ -369,249 +454,166 @@ export default function SearchClient() {
             {[0, 1, 2].map((i) => (
               <div key={i} className="ds-card">
                 <div className="flex items-center gap-4">
-                  <div className="skeleton h-10 w-10" />
+                  <div className="skeleton h-10 w-10 rounded-xl" />
                   <div className="flex-1 space-y-2">
                     <div className="skeleton h-4 w-1/3" />
-                    <div className="skeleton h-3 w-1/4" />
+                    <div className="skeleton h-3 w-1/2" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        ) : historyStatus === 'error' ? (
-          <div className="ds-card mt-8 border-[var(--ds-error-300)] text-center">
-            <h2 className="text-base font-semibold text-[var(--ds-text-primary)]">
-              Unable to load history
-            </h2>
-            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
-              We couldn&apos;t retrieve your previous runs. Please try again.
-            </p>
-            <button type="button" onClick={openHistory} className="btn-secondary mt-4">
-              Try again
-            </button>
-          </div>
-        ) : historyRuns.length === 0 ? (
-          <div className="ds-card mt-8 text-center">
-            <h2 className="text-base font-semibold text-[var(--ds-text-primary)]">
-              No previous runs yet
-            </h2>
-            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
-              Run your first LinkedIn intelligence analysis to see it here.
-            </p>
-            <button type="button" onClick={() => setView('search')} className="btn-gradient mt-5">
-              Start a search
-            </button>
-          </div>
-        ) : (
+        ) : null}
+
+        {historyStatus === 'error' ? (
+          <p className="mt-8 text-sm font-medium text-[var(--ds-text-error)]">
+            Unable to load your history. Please try again.
+          </p>
+        ) : null}
+
+        {historyStatus === 'ready' && historyRuns.length === 0 ? (
+          <p className="mt-8 text-sm text-[var(--ds-text-secondary)]">
+            No analyses yet. Run your first analysis from the search page.
+          </p>
+        ) : null}
+
+        {historyStatus === 'ready' && historyRuns.length > 0 ? (
           <div className="mt-8 space-y-4">
             {historyRuns.map((run) => {
               const preview = summaryPreview(run);
               return (
-                <div key={run.id} className="ds-card">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <CompanyLogo name={run.companyName} logo={run.companyLogo} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-[var(--ds-text-primary)]">
-                        {run.companyName}
-                      </p>
-                      {run.createdAt ? (
-                        <p className="text-xs text-[var(--ds-text-tertiary)]">
-                          {formatDate(run.createdAt)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="ds-chip">
-                      {run.type === 'OWN_BRANDING' ? 'Own Brand' : run.type}
-                    </span>
-                    {run.hasCompetitor ? <span className="pill">Competitor data</span> : null}
-                    <button
-                      type="button"
-                      onClick={() => viewHistoryEntry(run)}
-                      className="btn-secondary"
-                    >
-                      View
-                    </button>
-                  </div>
-                  {preview ? (
-                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
-                      {preview}
+                <div key={run.id} className="ds-card flex flex-wrap items-center gap-4">
+                  <CompanyLogo name={run.companyName} logo={run.companyLogo} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-[var(--ds-text-primary)]">
+                      {run.companyName}
                     </p>
-                  ) : null}
+                    <p className="text-xs text-[var(--ds-text-tertiary)]">
+                      {formatDate(run.createdAt)}
+                    </p>
+                    {preview ? (
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ds-text-secondary)]">
+                        {preview}
+                      </p>
+                    ) : null}
+                  </div>
+                  {run.hasCompetitor ? <span className="pill">Competitor linked</span> : null}
+                  <button
+                    type="button"
+                    onClick={() => viewHistoryEntry(run)}
+                    className="btn-secondary"
+                  >
+                    View report
+                  </button>
                 </div>
               );
             })}
           </div>
-        )}
+        ) : null}
       </main>
     );
   }
 
-  const searching = view === 'searching';
-
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
-      <div className="flex justify-end">
-        <button type="button" onClick={openHistory} disabled={searching} className="btn-secondary">
-          History
-        </button>
-      </div>
-
-      <div className="text-center">
-        <span className="ds-chip">Organic LinkedIn intelligence</span>
-        <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-tight text-[var(--ds-text-primary)] sm:text-5xl">
-          Decode any company&apos;s LinkedIn playbook
+    <main className="mx-auto max-w-6xl px-6 py-12">
+      <div className="mx-auto max-w-3xl text-center">
+        <span className="ds-chip">Watchtower</span>
+        <h1 className="mt-4 text-3xl font-semibold text-[var(--ds-text-primary)] md:text-4xl">
+          Decode any company&rsquo;s LinkedIn playbook
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[var(--ds-text-secondary)]">
-          Type a company name. Watchtower resolves the profile, analyzes organic LinkedIn activity,
-          and turns it into messaging, creative, engagement, audience, and strategic intelligence.
+        <p className="mt-3 text-sm leading-6 text-[var(--ds-text-secondary)]">
+          Organic messaging, content, creative, engagement, audience, and competitive intelligence
+          &mdash; in one report.
         </p>
-      </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
-        className="mx-auto mt-10 flex max-w-2xl items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-md)]"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="ml-2 h-5 w-5 shrink-0 text-[var(--ds-text-tertiary)]"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="M21 21l-4.35-4.35" />
-        </svg>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-            }
-          }}
-          placeholder="Company name"
-          disabled={searching}
-          className="min-w-0 flex-1 bg-transparent px-2 py-3 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
-        />
-        <button
-          type="button"
-          onClick={() => void runSearch()}
-          disabled={searching || !query.trim()}
-          className="btn-gradient shrink-0"
-        >
-          {searching ? 'Searching LinkedIn\u2026' : 'Analyze'}
-        </button>
-      </form>
-
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <span className="text-xs text-[var(--ds-text-tertiary)]">Try:</span>
-        {EXAMPLES.map((ex) => (
+        <div className="mt-8 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-sm)]">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void runSearch();
+              }
+            }}
+            placeholder="Company name (e.g. Stripe)"
+            disabled={view === 'searching'}
+            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
+          />
           <button
-            key={ex}
             type="button"
-            disabled={searching}
-            onClick={() => setQuery(ex)}
-            className="pill transition-colors hover:bg-[var(--ds-brand-surface)] hover:text-[var(--ds-brand)] disabled:opacity-50"
+            onClick={() => void runSearch()}
+            disabled={view === 'searching' || !query.trim()}
+            className="btn-gradient shrink-0"
           >
-            {ex}
+            {view === 'searching' ? 'Searching\u2026' : 'Search'}
           </button>
-        ))}
-      </div>
+        </div>
 
-      {view === 'search-error' ? (
-        <div className="mx-auto mt-8 max-w-2xl">
-          <div className="ds-card border-[var(--ds-error-300)] text-center">
-            <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">
-              Unable to search companies
-            </h3>
-            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
-              We couldn&apos;t retrieve matching LinkedIn companies. Please try again.
-            </p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
+          {EXAMPLES.map((name) => (
             <button
+              key={name}
               type="button"
-              onClick={() => void runSearch()}
-              className="btn-secondary mt-4"
+              disabled={view === 'searching'}
+              onClick={() => setQuery(name)}
+              className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Try again
+              {name}
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {view === 'empty' ? (
-        <div className="mx-auto mt-8 max-w-2xl">
-          <div className="ds-card text-center">
-            <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">
-              No matching companies found
-            </h3>
-            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
-              Try a different company name, LinkedIn URL, or numeric company ID.
-            </p>
-            <button type="button" onClick={resetToSearch} className="btn-secondary mt-4">
-              Back to search
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {searching ? (
-        <div className="mt-12">
-          <p className="text-center text-sm font-medium text-[var(--ds-text-secondary)]">
-            Finding matching LinkedIn companies&hellip;
-          </p>
-          <div className="progress-indeterminate mx-auto mt-4 max-w-md" />
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="ds-card">
-                <div className="flex gap-4">
-                  <div className="skeleton h-12 w-12" />
-                  <div className="flex-1 space-y-2">
-                    <div className="skeleton h-4 w-2/3" />
-                    <div className="skeleton h-3 w-1/3" />
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  <div className="skeleton h-3 w-full" />
-                  <div className="skeleton h-3 w-5/6" />
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <div className="skeleton h-8 w-24 rounded-full" />
-                  <div className="skeleton ml-auto h-9 w-40 rounded-xl" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : view === 'search' ? (
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {INFO_CARDS.map((card) => (
-            <div key={card.title} className="ds-card">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)]">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="var(--ds-brand)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d={card.icon} />
-                </svg>
-              </span>
-              <h3 className="mt-4 text-base font-semibold text-[var(--ds-text-primary)]">
-                {card.title}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">{card.body}</p>
-            </div>
           ))}
         </div>
-      ) : null}
+
+        {view === 'searching' ? <div className="progress-indeterminate mt-5" /> : null}
+
+        {view === 'search-error' ? (
+          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
+            Unable to search companies. Please try again.
+          </p>
+        ) : null}
+
+        {view === 'empty' ? (
+          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
+            No matching companies found. Try a different name.
+          </p>
+        ) : null}
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={openHistory}
+            className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+          >
+            View analysis history
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-12 grid gap-6 md:grid-cols-3">
+        {INFO_CARDS.map((card) => (
+          <div key={card.title} className="ds-card">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)]">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="var(--ds-brand)"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d={card.icon} />
+              </svg>
+            </span>
+            <h3 className="mt-4 text-base font-semibold text-[var(--ds-text-primary)]">
+              {card.title}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">{card.body}</p>
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
