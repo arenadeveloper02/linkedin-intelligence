@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-19T05:18:20.553Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-19T05:36:53.495Z.
 
 ## Overview
 
-LinkedIn Intelligence (Watchtower). Changes: (1) components/DataRenderer.tsx — isImageUrl now treats LinkedIn media CDN URLs as images and object entries with a 'logo' key render an <img> instead of a URL link, so the brand snapshot shows the logo image. (2) components/SearchClient.tsx — button texts changed to 'Get the playbook' and 'Compare with another'; competitor results now render on the main screen with a back button to the initial own-brand output (ownSnapshot state); playbook results render on the main screen (new 'playbook' view) with a back button to the report. (3) components/PlaybookModal.tsx — radio buttons removed (always own-brand source); modal now only triggers generation and forwards the result to the main screen via onResult. (4) components/CompetitorModal.tsx — popup now shows the current client's name, logo, LinkedIn link and followers; search + results stay in the popup; listing button renamed to 'Compare with another' and selecting a listing runs the comparison on the main screen via onSelect. (5) components/PlaybookView.tsx — new component with the playbook rendering extracted from the old modal. (6) lib/types.ts — added PlaybookResult interface only. (7) prisma/schema.prisma — echoed unchanged (no schema changes).
+LinkedIn Intelligence (Watchtower). Edits: (1) components/SearchClient.tsx — 'View analysis history' now renders as a btn-secondary button at the top of the search screen (calls openHistory) instead of a link; added handleOpenExistingCompetitor + profile-field extraction helpers and passed runId/onOpenExisting into CompetitorModal so an existing comparison opens on the main screen. (2) components/CompetitorModal.tsx — on open it checks the Arena history for the current run; when competitorOutput exists it shows the comparison details with an 'Open' button that renders the saved comparison on the main screen (search remains available below). (3) components/PlaybookModal.tsx — when a playbook was already generated for the run, the action button label changes from 'Get the playbook' to 'Open' (one-line ternary change). prisma/schema.prisma returned unchanged/additive per database rule.
 
 **Repository:** `linkedin-intelligence`  
 **File count:** 43
 
 ## Features
 
-- Brand snapshot renders the company logo image instead of a raw URL
-- 'Get the playbook' and 'Compare with another' popups with results on the main screen
-- Back navigation from competitor report and playbook to the initial output
-- Competitor popup shows current client name, logo, LinkedIn link and followers
-- Playbook generation without source radio buttons
+- Company LinkedIn search and analysis
+- Own-brand and competitor comparison reports
+- Strategic playbook generation with saved-playbook reuse (Open)
+- Analysis history via top button on the search screen
+- Existing competitor comparison detection with main-screen Open
 
 ## Tech Stack
 
@@ -151,21 +151,17 @@ LinkedIn Intelligence (Watchtower). Changes: (1) components/DataRenderer.tsx —
 
 ## Latest Change
 
-- **Updated at:** 2026-08-19T05:18:20.553Z
+- **Updated at:** 2026-08-19T05:36:53.495Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 Changes to implement:
 
 
 
-1) Logo In brand snapshot should show the image instead of URL 
+1) View analysis history should be a button on the top … not as a link 
 
-2) Change text from competitor analysis to “Compare with another”  and Playbook to “Get the playbook”
+2) “Compare with another” if the data is present then show the details … Open option to view in the main screen 
 
-3)  Remove the logic to show both the radio buttons in the “Get the playbook”
-
-4) Both “Get the playbook” and  “Compare with another” should open the open popup and the results should be in the main screen … there should be back option to go to the initial  Output 
-
-5) Show The current Client name and the logo and LinkedIn Link  and the followers in the popup Once the user clicks on  “Compare with another”   then the search should come once the user clicks on search the results will show in the popup and once the user clicks on the one of the listing then show the results in the main screen  and change the text only in this popup from Analyse to   “Compare with another” only in this popup 
+3) A playbook was already generated for this analysis run. Open it to view it on the main screen. If this comes in then change the Button text from  Get the Playbook to Open 
 
 Constraints:
 

@@ -134,7 +134,11 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
             disabled={!runId || status === 'loading' || prefetching}
             className="btn-gradient"
           >
-            {status === 'loading' ? 'Generating playbook\u2026' : 'Get the playbook'}
+            {status === 'loading'
+              ? 'Generating playbook\u2026'
+              : existing
+                ? 'Open'
+                : 'Get the playbook'}
           </button>
         </div>
 

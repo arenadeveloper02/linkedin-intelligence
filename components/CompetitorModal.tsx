@@ -1,9 +1,15 @@
 "use client"
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import CompanyLogo from '@/components/CompanyLogo';
 import { formatFollowers } from '@/lib/format';
-import type { CompanyResult, SelectedCompany } from '@/lib/types';
+import type {
+  AnalysisOutput,
+  ArenaRunEntry,
+  CompanyResult,
+  JsonValue,
+  SelectedCompany,
+} from '@/lib/types';
 
 interface CompetitorModalProps {
   open: boolean;
@@ -13,16 +19,78 @@ interface CompetitorModalProps {
   onSelect: (company: CompanyResult) => void;
   /** The current client whose report is open, shown at the top of the popup. */
   company: SelectedCompany | null;
+  /** The Arena run id for the open report; used to detect a saved comparison. */
+  runId: string | null;
+  /** Called with the saved competitor output; the comparison renders on the main screen. */
+  onOpenExisting: (output: AnalysisOutput) => void;
 }
 
 type ModalStatus = 'idle' | 'searching' | 'results' | 'empty' | 'error';
 
 const EXAMPLES = ['Position2', 'Sambanova', 'Stripe'];
 
-export default function CompetitorModal({ open, onClose, onSelect, company }: CompetitorModalProps) {
+function existingCompetitorName(output: AnalysisOutput): string | null {
+  const flat = output['getcompanyprofile.name'];
+  if (typeof flat === 'string' && flat.trim().length > 0) return flat;
+  const profile = output['getcompanyprofile'];
+  if (profile && typeof profile === 'object' && !Array.isArray(profile)) {
+    const n = (profile as { [key: string]: JsonValue })['name'];
+    if (typeof n === 'string' && n.trim().length > 0) return n;
+  }
+  return null;
+}
+
+export default function CompetitorModal({
+  open,
+  onClose,
+  onSelect,
+  company,
+  runId,
+  onOpenExisting,
+}: CompetitorModalProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ModalStatus>('idle');
   const [companies, setCompanies] = useState<CompanyResult[]>([]);
+  // Saved competitor analysis for this run (if the comparison already exists).
+  const [existingOutput, setExistingOutput] = useState<AnalysisOutput | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  // When the modal opens, check the Arena history for this run. If a
+  // competitor analysis was already generated, show its details with an
+  // option to open it on the main screen.
+  useEffect(() => {
+    if (!open || !runId) return;
+    let cancelled = false;
+    setExistingOutput(null);
+    setChecking(true);
+    const load = async () => {
+      try {
+        const res = await fetch('/api/arena-history');
+        if (!res.ok) return;
+        const data = (await res.json()) as { runs?: ArenaRunEntry[] };
+        const runs = Array.isArray(data.runs) ? data.runs : [];
+        const run = runs.find((r) => r.id === runId);
+        if (!run || cancelled) return;
+        const out = run.competitorOutput;
+        if (
+          out &&
+          typeof out === 'object' &&
+          !Array.isArray(out) &&
+          Object.keys(out).length > 0
+        ) {
+          setExistingOutput(out);
+        }
+      } catch {
+        // ignore \u2014 the search flow below stays available
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, runId]);
 
   if (!open) return null;
 
@@ -50,6 +118,7 @@ export default function CompetitorModal({ open, onClose, onSelect, company }: Co
   };
 
   const followers = company ? formatFollowers(company.followers) : '';
+  const existingName = existingOutput ? existingCompetitorName(existingOutput) : null;
 
   return (
     <div
@@ -92,6 +161,31 @@ export default function CompetitorModal({ open, onClose, onSelect, company }: Co
               ) : null}
             </div>
             {followers ? <span className="pill">{followers}</span> : null}
+          </div>
+        ) : null}
+
+        {checking ? <div className="progress-indeterminate mt-4" /> : null}
+
+        {existingOutput ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-brand-surface,#F3F8FE)] p-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-[var(--ds-text-primary)]">
+                {existingName
+                  ? `Comparison with ${existingName} is ready`
+                  : 'A comparison already exists for this run'}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[var(--ds-text-secondary)]">
+                A competitor analysis was already generated for this analysis run. Open it to view
+                it on the main screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenExisting(existingOutput)}
+              className="btn-gradient shrink-0"
+            >
+              Open
+            </button>
           </div>
         ) : null}
 

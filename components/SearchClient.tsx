@@ -71,6 +71,26 @@ function summaryPreview(run: ArenaRunEntry): string | null {
   return null;
 }
 
+function pickProfileField(output: AnalysisOutput, field: string): JsonValue | undefined {
+  const flat = output[`getcompanyprofile.${field}`];
+  if (flat !== undefined) return flat;
+  const profile = output['getcompanyprofile'];
+  if (profile && typeof profile === 'object' && !Array.isArray(profile)) {
+    return (profile as { [key: string]: JsonValue })[field];
+  }
+  return undefined;
+}
+
+function strOrNull(v: JsonValue | undefined): string | null {
+  return typeof v === 'string' && v.trim().length > 0 ? v : null;
+}
+
+function numOrNull(v: JsonValue | undefined): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 export default function SearchClient() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<View>('search');
@@ -224,6 +244,33 @@ export default function SearchClient() {
     );
   };
 
+  // Opens an already-saved competitor comparison on the main screen (no new
+  // analysis run) when the Arena history carries a competitorOutput.
+  const handleOpenExistingCompetitor = (output: AnalysisOutput) => {
+    if (selected && report) {
+      setOwnSnapshot({ company: selected, report, runId, hasCompetitor });
+    }
+    setShowCompetitorModal(false);
+    setSelected({
+      companyName: strOrNull(pickProfileField(output, 'name')) ?? 'Competitor',
+      companyId: strOrNull(pickProfileField(output, 'id')) ?? '',
+      companyLogo: strOrNull(pickProfileField(output, 'logo')),
+      industry: strOrNull(pickProfileField(output, 'industry')),
+      location: strOrNull(pickProfileField(output, 'location')),
+      followers: numOrNull(
+        pickProfileField(output, 'followers_count') ?? pickProfileField(output, 'followers'),
+      ),
+      description: null,
+      profileUrl: strOrNull(
+        pickProfileField(output, 'url') ?? pickProfileField(output, 'profile_url'),
+      ),
+      analysisType: 'competitor',
+    });
+    setReport(output);
+    setHasCompetitor(true);
+    setView('report');
+  };
+
   const backToOwnReport = () => {
     if (!ownSnapshot) return;
     setSelected(ownSnapshot.company);
@@ -368,6 +415,8 @@ export default function SearchClient() {
           onClose={() => setShowCompetitorModal(false)}
           onSelect={handleCompetitorSelect}
           company={selected}
+          runId={runId}
+          onOpenExisting={handleOpenExistingCompetitor}
         />
         <PlaybookModal
           open={showPlaybookModal}
@@ -379,106 +428,39 @@ export default function SearchClient() {
     );
   }
 
-  if (view === 'analysis-error' && selected) {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-16">
-        <div className="ds-card border-[var(--ds-error-300)] text-center">
-          <h2 className="text-lg font-semibold text-[var(--ds-text-primary)]">
-            Analysis could not be completed
-          </h2>
-          <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
-            Something went wrong while building the intelligence report for {selected.companyName}.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => void runAnalysis(selected, runId)}
-              className="btn-gradient"
-            >
-              Retry analysis
-            </button>
-            <button type="button" onClick={() => setView('results')} className="btn-secondary">
-              Back to company selection
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  if (view === 'competitor-unavailable') {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-16">
-        <div className="ds-card text-center">
-          <span className="ds-chip">Compare with another</span>
-          <h2 className="mt-3 text-lg font-semibold text-[var(--ds-text-primary)]">
-            Competitor analysis workflow is not configured yet.
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
-            The competitor intelligence pipeline can be plugged in independently. Until then, run an
-            Own Brand Analysis on the selected company.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <button type="button" onClick={() => setView('results')} className="btn-gradient">
-              Back to company selection
-            </button>
-            <button type="button" onClick={resetToSearch} className="btn-secondary">
-              Back to search
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   if (view === 'history') {
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
         <button
           type="button"
-          onClick={() => setView('search')}
+          onClick={resetToSearch}
           className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
         >
           &larr; Back to search
         </button>
-
         <p className="mt-6 text-xs font-semibold tracking-[0.2em] text-[var(--ds-text-tertiary)]">
           HISTORY
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--ds-text-primary)]">
-          Previous analyses
+          Analysis history
         </h1>
 
-        {historyStatus === 'loading' ? (
-          <div className="mt-8 space-y-4">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="ds-card">
-                <div className="flex items-center gap-4">
-                  <div className="skeleton h-10 w-10 rounded-xl" />
-                  <div className="flex-1 space-y-2">
-                    <div className="skeleton h-4 w-1/3" />
-                    <div className="skeleton h-3 w-1/2" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        {historyStatus === 'loading' ? <div className="progress-indeterminate mt-6" /> : null}
 
         {historyStatus === 'error' ? (
-          <p className="mt-8 text-sm font-medium text-[var(--ds-text-error)]">
-            Unable to load your history. Please try again.
+          <p className="mt-6 text-sm font-medium text-[var(--ds-text-error)]">
+            Unable to load history. Please try again.
           </p>
         ) : null}
 
         {historyStatus === 'ready' && historyRuns.length === 0 ? (
-          <p className="mt-8 text-sm text-[var(--ds-text-secondary)]">
-            No analyses yet. Run your first analysis from the search page.
+          <p className="mt-6 text-sm text-[var(--ds-text-secondary)]">
+            No analyses yet. Run your first analysis from the search screen.
           </p>
         ) : null}
 
         {historyStatus === 'ready' && historyRuns.length > 0 ? (
-          <div className="mt-8 space-y-4">
+          <div className="mt-6 space-y-3">
             {historyRuns.map((run) => {
               const preview = summaryPreview(run);
               return (
@@ -497,11 +479,11 @@ export default function SearchClient() {
                       </p>
                     ) : null}
                   </div>
-                  {run.hasCompetitor ? <span className="pill">Competitor linked</span> : null}
+                  {run.hasCompetitor ? <span className="pill">Competitor compared</span> : null}
                   <button
                     type="button"
                     onClick={() => viewHistoryEntry(run)}
-                    className="btn-secondary"
+                    className="btn-gradient"
                   >
                     View report
                   </button>
@@ -515,18 +497,26 @@ export default function SearchClient() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <div className="mx-auto max-w-3xl text-center">
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <div className="flex justify-end">
+        <button type="button" onClick={openHistory} className="btn-secondary">
+          View analysis history
+        </button>
+      </div>
+
+      <div className="mx-auto mt-8 max-w-2xl text-center">
         <span className="ds-chip">Watchtower</span>
-        <h1 className="mt-4 text-3xl font-semibold text-[var(--ds-text-primary)] md:text-4xl">
+        <h1 className="mt-3 text-3xl font-semibold text-[var(--ds-text-primary)]">
           Decode any company&rsquo;s LinkedIn playbook
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--ds-text-secondary)]">
-          Organic messaging, content, creative, engagement, audience, and competitive intelligence
-          &mdash; in one report.
+          Search a company, run the analysis, and get messaging, content, creative, engagement,
+          audience, and competitive intelligence in one report.
         </p>
+      </div>
 
-        <div className="mt-8 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-sm)]">
+      <div className="mx-auto mt-8 max-w-2xl">
+        <div className="flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-sm)]">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -536,7 +526,7 @@ export default function SearchClient() {
                 void runSearch();
               }
             }}
-            placeholder="Company name (e.g. Stripe)"
+            placeholder="Company name (e.g. Position2)"
             disabled={view === 'searching'}
             className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
           />
@@ -549,7 +539,6 @@ export default function SearchClient() {
             {view === 'searching' ? 'Searching\u2026' : 'Search'}
           </button>
         </div>
-
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
           {EXAMPLES.map((name) => (
@@ -565,7 +554,7 @@ export default function SearchClient() {
           ))}
         </div>
 
-        {view === 'searching' ? <div className="progress-indeterminate mt-5" /> : null}
+        {view === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}
 
         {view === 'search-error' ? (
           <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
@@ -579,27 +568,32 @@ export default function SearchClient() {
           </p>
         ) : null}
 
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={openHistory}
-            className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
-          >
-            View analysis history
-          </button>
-        </div>
+        {view === 'analysis-error' ? (
+          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
+            The analysis could not be completed. Please try again.
+          </p>
+        ) : null}
+
+        {view === 'competitor-unavailable' ? (
+          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
+            Competitor analysis is not available right now. Please try again later.
+          </p>
+        ) : null}
       </div>
 
-      <div className="mt-12 grid gap-6 md:grid-cols-3">
+      <div className="mt-12 grid gap-4 md:grid-cols-3">
         {INFO_CARDS.map((card) => (
           <div key={card.title} className="ds-card">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface)]">
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              style={{ background: 'var(--ds-brand-surface, #F3F8FE)' }}
+            >
               <svg
                 viewBox="0 0 24 24"
                 className="h-5 w-5"
                 fill="none"
-                stroke="var(--ds-brand)"
-                strokeWidth="1.8"
+                stroke="var(--ds-color-icon-brand, #1A73E8)"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 aria-hidden="true"
