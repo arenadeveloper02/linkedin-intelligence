@@ -28,6 +28,10 @@ export async function POST(req: NextRequest) {
   }
 
   const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+  // Playbook mode selected via the radio buttons in the modal \u2014 forwarded
+  // to the workflow payload exactly as "mode": "OWN" | "COMPETITOR".
+  const modeRaw = typeof payload.mode === 'string' ? payload.mode.trim().toUpperCase() : '';
+  const mode: 'OWN' | 'COMPETITOR' = modeRaw === 'COMPETITOR' ? 'COMPETITOR' : 'OWN';
 
   if (!id) {
     return NextResponse.json({ error: 'Run id is required.' }, { status: 400 });
@@ -40,10 +44,11 @@ export async function POST(req: NextRequest) {
 
   try {
     // Payload matches the documented playbook workflow API exactly:
-    // { email, id, stream: true, selectedOutputs: ['playbookagent.content'], ... }
+    // { email, id, mode, stream: true, selectedOutputs: ['playbookagent.content'], ... }
     const parsed = await executeWorkflow(PLAYBOOK_WORKFLOW_ID, {
       email,
       id,
+      mode,
       stream: true,
       selectedOutputs: ['playbookagent.content'],
       includeThinking: false,
