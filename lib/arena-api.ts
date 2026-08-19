@@ -12,6 +12,8 @@ export const RUN_WORKFLOW_ID = 'ef016dc1-4a08-4c1b-b5e4-69080ea7c22d';
 
 export const PLAYBOOK_WORKFLOW_ID = '00bfdfb5-3726-4a32-a130-1eeb51d6a238';
 
+export const COMPARE_WORKFLOW_ID = '674e91f8-608e-447a-89d4-19bbbc415e53';
+
 export const analysisWorkflows: { ownBrand: string; competitor: string | null } = {
   ownBrand: '13e76c2b-bbdc-43c5-835e-92027a6c43e9',
   competitor: '13e76c2b-bbdc-43c5-835e-92027a6c43e9',

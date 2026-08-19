@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
           isRecord(comp) && Object.keys(comp).length > 0
             ? (namespaceHistoryOutput(comp) as AnalysisOutput)
             : null,
+        compare: typeof r.compare === 'string' && r.compare.trim() ? r.compare : null,
       });
     }
 

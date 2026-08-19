@@ -114,6 +114,10 @@ export default function SearchClient() {
   const [ownSnapshot, setOwnSnapshot] = useState<OwnReportSnapshot | null>(null);
   // Playbook result shown on the main screen with a back option to the report.
   const [playbookResult, setPlaybookResult] = useState<PlaybookResult | null>(null);
+  // Saved comparison report text ('compare' key from the Arena history) for
+  // the currently open competitor report; used by the "Comparison report"
+  // button on the report dashboard.
+  const [savedCompare, setSavedCompare] = useState<string | null>(null);
 
   const runSearch = async () => {
     const term = query.trim();
@@ -207,6 +211,7 @@ export default function SearchClient() {
     if (!c.id) return;
     setOwnSnapshot(null);
     setPlaybookResult(null);
+    setSavedCompare(null);
     void runAnalysis({
       companyName: c.name,
       companyId: c.id,
@@ -228,6 +233,7 @@ export default function SearchClient() {
       setOwnSnapshot({ company: selected, report, runId, hasCompetitor });
     }
     setShowCompetitorModal(false);
+    setSavedCompare(null);
     void runAnalysis(
       {
         companyName: c.name,
@@ -245,8 +251,10 @@ export default function SearchClient() {
   };
 
   // Opens an already-saved competitor comparison on the main screen (no new
-  // analysis run) when the Arena history carries a competitorOutput.
-  const handleOpenExistingCompetitor = (output: AnalysisOutput) => {
+  // analysis run) when the Arena history carries a competitorOutput. Any saved
+  // comparison report text ('compare' key) is kept for the report's
+  // "Comparison report" button.
+  const handleOpenExistingCompetitor = (output: AnalysisOutput, compare: string | null) => {
     if (selected && report) {
       setOwnSnapshot({ company: selected, report, runId, hasCompetitor });
     }
@@ -268,6 +276,7 @@ export default function SearchClient() {
     });
     setReport(output);
     setHasCompetitor(true);
+    setSavedCompare(compare);
     setView('report');
   };
 
@@ -278,6 +287,7 @@ export default function SearchClient() {
     setRunId(ownSnapshot.runId);
     setHasCompetitor(ownSnapshot.hasCompetitor);
     setOwnSnapshot(null);
+    setSavedCompare(null);
     setView('report');
   };
 
@@ -323,6 +333,7 @@ export default function SearchClient() {
     setHasCompetitor(run.hasCompetitor);
     setOwnSnapshot(null);
     setPlaybookResult(null);
+    setSavedCompare(null);
     setShowCompetitorModal(false);
     setShowPlaybookModal(false);
     setView('report');
@@ -336,6 +347,7 @@ export default function SearchClient() {
     setHasCompetitor(false);
     setOwnSnapshot(null);
     setPlaybookResult(null);
+    setSavedCompare(null);
     setShowCompetitorModal(false);
     setShowPlaybookModal(false);
   };
@@ -364,9 +376,9 @@ export default function SearchClient() {
           PLAYBOOK
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--ds-text-primary)]">
-          Strategic playbook{selected ? ` \u00b7 ${selected.companyName}` : ''}
+          Strategic playbook{selected ? ` \u2014 ${selected.companyName}` : ''}
         </h1>
-        <div className="ds-card mt-6">
+        <div className="ds-card mt-8">
           <PlaybookView
             playbook={playbookResult.playbook}
             playbookText={playbookResult.playbookText}
@@ -377,38 +389,18 @@ export default function SearchClient() {
   }
 
   if (view === 'report' && selected && report) {
-    const isCompetitorReport = selected.analysisType === 'competitor' && ownSnapshot !== null;
     return (
       <>
-        {isCompetitorReport ? (
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6 pt-6">
-            <button type="button" onClick={backToOwnReport} className="btn-secondary">
-              &larr; Back to your report
-            </button>
-            <span className="ds-chip">Comparison report</span>
-          </div>
-        ) : (
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-3 px-6 pt-6">
-            <button
-              type="button"
-              onClick={() => setShowPlaybookModal(true)}
-              className="btn-secondary"
-            >
-              Get the playbook
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCompetitorModal(true)}
-              className="btn-gradient"
-            >
-              Compare with another
-            </button>
-          </div>
-        )}
         <ReportDashboard
           company={selected}
           output={report}
-          onBack={isCompetitorReport ? backToOwnReport : resetToSearch}
+          onBack={ownSnapshot ? backToOwnReport : resetToSearch}
+          onRunCompetitor={
+            selected.analysisType === 'own-brand' ? () => setShowCompetitorModal(true) : undefined
+          }
+          onGetPlaybook={() => setShowPlaybookModal(true)}
+          runId={runId}
+          savedCompare={savedCompare}
         />
         <CompetitorModal
           open={showCompetitorModal}
@@ -442,25 +434,38 @@ export default function SearchClient() {
           HISTORY
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--ds-text-primary)]">
-          Analysis history
+          Previous analyses
         </h1>
 
-        {historyStatus === 'loading' ? <div className="progress-indeterminate mt-6" /> : null}
+        {historyStatus === 'loading' ? <div className="progress-indeterminate mt-8" /> : null}
 
         {historyStatus === 'error' ? (
-          <p className="mt-6 text-sm font-medium text-[var(--ds-text-error)]">
-            Unable to load history. Please try again.
-          </p>
+          <div className="ds-card mt-8">
+            <p className="text-sm font-medium text-[var(--ds-text-error)]">
+              Unable to load your history. Please try again.
+            </p>
+            <button type="button" onClick={openHistory} className="btn-secondary mt-4">
+              Retry
+            </button>
+          </div>
         ) : null}
 
         {historyStatus === 'ready' && historyRuns.length === 0 ? (
-          <p className="mt-6 text-sm text-[var(--ds-text-secondary)]">
-            No analyses yet. Run your first analysis from the search screen.
-          </p>
+          <div className="ds-card mt-8 text-center">
+            <h2 className="text-base font-semibold text-[var(--ds-text-primary)]">
+              No analyses yet
+            </h2>
+            <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">
+              Run your first LinkedIn intelligence report to see it here.
+            </p>
+            <button type="button" onClick={resetToSearch} className="btn-gradient mt-5">
+              Start a search
+            </button>
+          </div>
         ) : null}
 
         {historyStatus === 'ready' && historyRuns.length > 0 ? (
-          <div className="mt-6 space-y-3">
+          <div className="mt-8 space-y-4">
             {historyRuns.map((run) => {
               const preview = summaryPreview(run);
               return (
@@ -470,22 +475,24 @@ export default function SearchClient() {
                     <p className="truncate font-semibold text-[var(--ds-text-primary)]">
                       {run.companyName}
                     </p>
-                    <p className="text-xs text-[var(--ds-text-tertiary)]">
-                      {formatDate(run.createdAt)}
-                    </p>
+                    {run.createdAt ? (
+                      <p className="text-xs text-[var(--ds-text-tertiary)]">
+                        {formatDate(run.createdAt)}
+                      </p>
+                    ) : null}
                     {preview ? (
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ds-text-secondary)]">
                         {preview}
                       </p>
                     ) : null}
                   </div>
-                  {run.hasCompetitor ? <span className="pill">Competitor compared</span> : null}
+                  {run.hasCompetitor ? <span className="ds-chip">Competitor linked</span> : null}
                   <button
                     type="button"
                     onClick={() => viewHistoryEntry(run)}
-                    className="btn-gradient"
+                    className="btn-secondary"
                   >
-                    View report
+                    Open report &rarr;
                   </button>
                 </div>
               );
@@ -496,103 +503,98 @@ export default function SearchClient() {
     );
   }
 
+  const searching = view === 'searching';
+
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <div className="flex justify-end">
+    <main className="mx-auto max-w-5xl px-6 py-12">
+      <div className="flex items-center justify-between">
+        <span className="ds-chip">LinkedIn Intelligence</span>
         <button type="button" onClick={openHistory} className="btn-secondary">
-          View analysis history
+          History
         </button>
       </div>
 
-      <div className="mx-auto mt-8 max-w-2xl text-center">
-        <span className="ds-chip">Watchtower</span>
-        <h1 className="mt-3 text-3xl font-semibold text-[var(--ds-text-primary)]">
-          Decode any company&rsquo;s LinkedIn playbook
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-[var(--ds-text-secondary)]">
-          Search a company, run the analysis, and get messaging, content, creative, engagement,
-          audience, and competitive intelligence in one report.
-        </p>
-      </div>
+      <h1 className="mt-8 text-3xl font-semibold leading-tight text-[var(--ds-text-primary)] md:text-4xl">
+        Decode any company&rsquo;s LinkedIn playbook
+      </h1>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--ds-text-secondary)]">
+        Search a company, run the analysis, and get messaging, content, creative, engagement,
+        audience, and competitive intelligence with an actionable playbook.
+      </p>
 
-      <div className="mx-auto mt-8 max-w-2xl">
-        <div className="flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-sm)]">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void runSearch();
-              }
-            }}
-            placeholder="Company name (e.g. Position2)"
-            disabled={view === 'searching'}
-            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
-          />
+      <div className="mt-8 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2 shadow-[var(--ds-elevation-sm)]">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void runSearch();
+            }
+          }}
+          placeholder="Company name, e.g. Position2"
+          disabled={searching}
+          className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={() => void runSearch()}
+          disabled={searching || !query.trim()}
+          className="btn-gradient shrink-0"
+        >
+          {searching ? 'Searching\u2026' : 'Search'}
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
+        {EXAMPLES.map((name) => (
           <button
+            key={name}
             type="button"
-            onClick={() => void runSearch()}
-            disabled={view === 'searching' || !query.trim()}
-            className="btn-gradient shrink-0"
+            disabled={searching}
+            onClick={() => setQuery(name)}
+            className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {view === 'searching' ? 'Searching\u2026' : 'Search'}
+            {name}
           </button>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
-          {EXAMPLES.map((name) => (
-            <button
-              key={name}
-              type="button"
-              disabled={view === 'searching'}
-              onClick={() => setQuery(name)}
-              className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-
-        {view === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}
-
-        {view === 'search-error' ? (
-          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
-            Unable to search companies. Please try again.
-          </p>
-        ) : null}
-
-        {view === 'empty' ? (
-          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
-            No matching companies found. Try a different name.
-          </p>
-        ) : null}
-
-        {view === 'analysis-error' ? (
-          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
-            The analysis could not be completed. Please try again.
-          </p>
-        ) : null}
-
-        {view === 'competitor-unavailable' ? (
-          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
-            Competitor analysis is not available right now. Please try again later.
-          </p>
-        ) : null}
+        ))}
       </div>
 
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
+      {searching ? <div className="progress-indeterminate mt-6" /> : null}
+
+      {view === 'search-error' ? (
+        <p className="mt-6 text-sm font-medium text-[var(--ds-text-error)]">
+          Unable to search companies. Please try again.
+        </p>
+      ) : null}
+
+      {view === 'empty' ? (
+        <p className="mt-6 text-sm text-[var(--ds-text-secondary)]">
+          No matching companies found. Try a different name.
+        </p>
+      ) : null}
+
+      {view === 'analysis-error' ? (
+        <p className="mt-6 text-sm font-medium text-[var(--ds-text-error)]">
+          The analysis could not be completed. Please try again.
+        </p>
+      ) : null}
+
+      {view === 'competitor-unavailable' ? (
+        <p className="mt-6 text-sm font-medium text-[var(--ds-text-error)]">
+          Competitor analysis is not configured yet.
+        </p>
+      ) : null}
+
+      <div className="mt-12 grid gap-6 md:grid-cols-3">
         {INFO_CARDS.map((card) => (
           <div key={card.title} className="ds-card">
-            <span
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
-              style={{ background: 'var(--ds-brand-surface, #F3F8FE)' }}
-            >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-brand-surface,#F3F8FE)]">
               <svg
                 viewBox="0 0 24 24"
                 className="h-5 w-5"
                 fill="none"
-                stroke="var(--ds-color-icon-brand, #1A73E8)"
+                stroke="var(--ds-brand, #1A73E8)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"

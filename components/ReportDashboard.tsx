@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CompanyLogo from '@/components/CompanyLogo';
 import { DataRenderer, hasContent, humanizeKey } from '@/components/DataRenderer';
+import { RichText } from '@/components/PlaybookView';
 import { decodeUnicodeEscapes, formatCompact, formatDate, formatFollowers } from '@/lib/format';
 import type { AnalysisOutput, JsonValue, SelectedCompany } from '@/lib/types';
 
@@ -12,6 +13,11 @@ interface ReportDashboardProps {
   output: AnalysisOutput;
   onBack?: () => void;
   onRunCompetitor?: () => void;
+  onGetPlaybook?: () => void;
+  /** Arena run id for this report; required to generate the comparison report. */
+  runId?: string | null;
+  /** Saved comparison report text from the Arena history ('compare' key), when present. */
+  savedCompare?: string | null;
 }
 
 type Rec = { [key: string]: JsonValue };
@@ -337,8 +343,57 @@ export default function ReportDashboard({
   output,
   onBack,
   onRunCompetitor,
+  onGetPlaybook,
+  runId,
+  savedCompare,
 }: ReportDashboardProps) {
   const [section, setSection] = useState<SectionId>('overview');
+
+  // Comparison report: reuse the saved 'compare' text from the Arena history
+  // when present; otherwise the button calls /api/compare to generate it.
+  const [compareText, setCompareText] = useState<string | null>(savedCompare ?? null);
+  const [compareStatus, setCompareStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    savedCompare ? 'ready' : 'idle',
+  );
+  const [showCompare, setShowCompare] = useState(false);
+
+  // Keep the compare state in sync when the report switches without a remount
+  // (e.g. opening a saved comparison from the modal on the main screen).
+  useEffect(() => {
+    setCompareText(savedCompare ?? null);
+    setCompareStatus(savedCompare ? 'ready' : 'idle');
+    setShowCompare(false);
+  }, [savedCompare, company.companyId, company.analysisType]);
+
+  const runCompare = async () => {
+    if (compareText) {
+      setShowCompare(true);
+      return;
+    }
+    if (!runId || compareStatus === 'loading') return;
+    setCompareStatus('loading');
+    try {
+      const res = await fetch('/api/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: runId }),
+      });
+      if (!res.ok) {
+        setCompareStatus('error');
+        return;
+      }
+      const data = (await res.json()) as { compareText?: string };
+      if (typeof data.compareText === 'string' && data.compareText.trim().length > 0) {
+        setCompareText(data.compareText);
+        setCompareStatus('ready');
+        setShowCompare(true);
+        return;
+      }
+      setCompareStatus('error');
+    } catch {
+      setCompareStatus('error');
+    }
+  };
 
   const postsRaw = pick(output, 'getcompanypost.items');
   const posts: Rec[] = Array.isArray(postsRaw) ? postsRaw.filter(isRec) : [];
@@ -359,113 +414,162 @@ export default function ReportDashboard({
 
   const profileName = asString(pick(output, 'getcompanyprofile.name')) ?? company.companyName;
   const profileLogo = asString(pick(output, 'getcompanyprofile.logo')) ?? company.companyLogo;
-  const followers =
-    asNum(pick(output, 'getcompanyprofile.followers_count')) ?? company.followers;
-  const employees = asNum(pick(output, 'getcompanyprofile.employee_count'));
-  const website = asString(pick(output, 'getcompanyprofile.website'));
   const profileUrl = asString(pick(output, 'getcompanyprofile.profile_url')) ?? company.profileUrl;
+  const followersCount =
+    asNum(pick(output, 'getcompanyprofile.followers_count')) ?? company.followers;
+  const employeeCount = asNum(pick(output, 'getcompanyprofile.employee_count'));
   const description =
     asString(pick(output, 'getcompanyprofile.description')) ?? company.description;
+  const meta = [company.industry, company.location].filter(Boolean).join(' \u00b7 ');
+  const followersLabel = formatFollowers(followersCount);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
-          >
-            &larr; New analysis
-          </button>
-        ) : (
-          <Link href="/" className="text-sm font-medium text-[var(--ds-text-link)] hover:underline">
-            &larr; New analysis
-          </Link>
-        )}
-        {onRunCompetitor ? (
-          <button type="button" onClick={onRunCompetitor} className="btn-gradient">
-            Competitor Analysis
-          </button>
-        ) : null}
-      </div>
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+        >
+          &larr; Back
+        </button>
+      ) : (
+        <Link
+          href="/history"
+          className="text-sm font-medium text-[var(--ds-text-link)] hover:underline"
+        >
+          &larr; Back to history
+        </Link>
+      )}
 
-      <div className="ds-card mt-4 flex flex-wrap items-center gap-4">
-        <CompanyLogo name={profileName} logo={profileLogo} size="lg" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold text-[var(--ds-text-primary)]">{profileName}</h1>
-            <span className="ds-chip">
-              {company.analysisType === 'competitor'
-                ? 'Competitor Intelligence'
-                : 'Own Brand Intelligence'}
-            </span>
+      <div className="ds-card mt-6">
+        <div className="flex flex-wrap items-start gap-4">
+          <CompanyLogo name={profileName} logo={profileLogo} size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold text-[var(--ds-text-primary)]">
+                {profileName}
+              </h1>
+              <span className="ds-chip">
+                {company.analysisType === 'competitor'
+                  ? 'Competitor Intelligence'
+                  : 'Own Brand Intelligence'}
+              </span>
+            </div>
+            {meta ? (
+              <p className="mt-1 text-sm text-[var(--ds-text-secondary)]">{meta}</p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {followersLabel ? <span className="pill">{followersLabel}</span> : null}
+              {employeeCount !== null ? (
+                <span className="pill">{formatCompact(employeeCount)} employees</span>
+              ) : null}
+              {profileUrl ? (
+                <a
+                  href={profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-[var(--ds-text-link)] hover:underline"
+                >
+                  View on LinkedIn {'\u2197'}
+                </a>
+              ) : null}
+            </div>
           </div>
-          {description ? (
-            <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
-              {decodeUnicodeEscapes(description)}
-            </p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--ds-text-secondary)]">
-            {followers !== null ? <span className="pill">{formatFollowers(followers)}</span> : null}
-            {employees !== null ? (
-              <span className="pill">{formatCompact(employees)} employees</span>
-            ) : null}
-            {website ? (
-              <a
-                href={website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-[var(--ds-text-link)] hover:underline"
+          <div className="flex flex-wrap gap-2">
+            {company.analysisType === 'competitor' && (compareText || runId) ? (
+              <button
+                type="button"
+                onClick={() => void runCompare()}
+                disabled={compareStatus === 'loading'}
+                className="btn-gradient"
               >
-                Website {'\u2197'}
-              </a>
+                {compareStatus === 'loading' ? 'Generating comparison\u2026' : 'Comparison report'}
+              </button>
             ) : null}
-            {profileUrl ? (
-              <a
-                href={profileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-[var(--ds-text-link)] hover:underline"
-              >
-                LinkedIn profile {'\u2197'}
-              </a>
+            {onGetPlaybook ? (
+              <button type="button" onClick={onGetPlaybook} className="btn-gradient">
+                Get the playbook
+              </button>
+            ) : null}
+            {onRunCompetitor ? (
+              <button type="button" onClick={onRunCompetitor} className="btn-secondary">
+                Compare with another
+              </button>
             ) : null}
           </div>
         </div>
       </div>
 
-      {/* Section tabs — intentionally not sticky/fixed so they scroll with the page */}
-      <div className="mt-6 overflow-x-auto border-b border-[var(--ds-border-default)]">
-        <nav className="flex min-w-max gap-1">
-          {SECTIONS.map((s) => (
+      {compareStatus === 'loading' ? <div className="progress-indeterminate mt-4" /> : null}
+
+      {compareStatus === 'error' ? (
+        <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
+          The comparison report could not be generated. Please try again.
+        </p>
+      ) : null}
+
+      {showCompare && compareText ? (
+        <div className="ds-card mt-6">
+          <div className="flex items-start justify-between gap-4">
+            <h2 className="text-xl font-semibold text-[var(--ds-text-primary)]">
+              Comparison report
+            </h2>
             <button
-              key={s.id}
               type="button"
-              onClick={() => setSection(s.id)}
-              className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-                section === s.id
-                  ? 'border-[var(--ds-color-brand-default,#1A73E8)] text-[var(--ds-text-link)]'
-                  : 'border-transparent text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
-              }`}
+              onClick={() => setShowCompare(false)}
+              className="btn-secondary shrink-0"
             >
-              {s.label}
+              Hide
             </button>
-          ))}
-        </nav>
+          </div>
+          <div className="mt-4">
+            <RichText text={compareText} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-8 flex flex-wrap gap-2">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSection(s.id)}
+            className={
+              section === s.id
+                ? 'rounded-full bg-[var(--ds-brand,#1A73E8)] px-4 py-1.5 text-xs font-semibold text-white'
+                : 'rounded-full border border-[var(--ds-border-default)] bg-white px-4 py-1.5 text-xs font-medium text-[var(--ds-text-secondary)] hover:bg-[var(--ds-brand-surface,#F3F8FE)]'
+            }
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
       {section === 'overview' ? (
         <>
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            <KpiTile
-              label="Followers"
-              value={followers !== null ? formatCompact(followers) : '\u2014'}
-            />
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {followersCount !== null ? (
+              <KpiTile label="Followers" value={formatCompact(followersCount)} />
+            ) : null}
+            {employeeCount !== null ? (
+              <KpiTile label="Employees" value={formatCompact(employeeCount)} />
+            ) : null}
             <KpiTile label="Posts analyzed" value={String(posts.length)} />
-            <KpiTile label="Avg engagement" value={formatCompact(avgEngagement)} sub="per post" />
-            <KpiTile label="Total reactions" value={formatCompact(totals.reactions)} />
+            <KpiTile
+              label="Avg engagement"
+              value={formatCompact(avgEngagement)}
+              sub={`${formatCompact(totals.total)} total interactions`}
+            />
           </div>
+          {description ? (
+            <div className="ds-card mt-6">
+              <h3 className="mb-4 text-base font-semibold text-[var(--ds-text-primary)]">About</h3>
+              <p className="whitespace-pre-line text-sm leading-6 text-[var(--ds-text-secondary)]">
+                {decodeUnicodeEscapes(description)}
+              </p>
+            </div>
+          ) : null}
           <KeyBlock output={output} k="messagingagent.summary" title="Executive summary" />
           <KeyBlock output={output} k="messagingagent.company" title="Company snapshot" />
           <KeyBlock output={output} k="messagingagent.stats" title="Key stats" />
@@ -502,32 +606,45 @@ export default function ReportDashboard({
       ) : null}
 
       {section === 'engagement' ? (
-        <KeyBlock output={output} k="contentcreativeagent.engagement" title="Engagement analysis" />
+        <>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiTile label="Total reactions" value={formatCompact(totals.reactions)} />
+            <KpiTile label="Total comments" value={formatCompact(totals.comments)} />
+            <KpiTile label="Total reposts" value={formatCompact(totals.reposts)} />
+            <KpiTile label="Avg per post" value={formatCompact(avgEngagement)} />
+          </div>
+          <KeyBlock output={output} k="contentcreativeagent.engagement" title="Engagement analysis" />
+          {sortedPosts.length > 0 ? (
+            <div className="ds-card mt-6">
+              <h3 className="mb-4 text-base font-semibold text-[var(--ds-text-primary)]">
+                Top performing posts
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {sortedPosts.slice(0, 4).map((p, i) => (
+                  <PostCard key={`top-${i}`} post={p} rank={`Top #${i + 1}`} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {section === 'audience' ? (
         <>
-          <KeyBlock output={output} k="strategyagent.personas" title="Audience personas" />
+          <KeyBlock output={output} k="strategyagent.personas" title="Personas" />
           <KeyBlock output={output} k="strategyagent.audienceDetail" title="Audience detail" />
         </>
       ) : null}
 
       {section === 'strategy' ? (
-        <KeyBlock output={output} k="strategyagent.strategy" title="Strategic recommendations" />
+        <KeyBlock output={output} k="strategyagent.strategy" title="Strategy" />
       ) : null}
 
       {section === 'competitive' ? (
         <>
-          <ScoreBars
-            value={pick(output, 'competitiveagent.scorecard')}
-            title="Competitive scorecard"
-          />
+          <ScoreBars value={pick(output, 'competitiveagent.scorecard')} title="Scorecard" />
           <KeyBlock output={output} k="competitiveagent.scorecardOverall" title="Overall score" />
-          <KeyBlock
-            output={output}
-            k="competitiveagent.competitive"
-            title="Competitive positioning"
-          />
+          <KeyBlock output={output} k="competitiveagent.competitive" title="Competitive analysis" />
           <KeyBlock output={output} k="competitiveagent.campaigns" title="Campaigns" />
           <KeyBlock output={output} k="competitiveagent.launches" title="Launches" />
           <KeyBlock
@@ -535,25 +652,21 @@ export default function ReportDashboard({
             k="competitiveagent.messagingEvolution"
             title="Messaging evolution"
           />
-          <KeyBlock
-            output={output}
-            k="competitiveagent.recommendations"
-            title="Competitive recommendations"
-          />
+          <KeyBlock output={output} k="competitiveagent.recommendations" title="Recommendations" />
         </>
       ) : null}
 
       {section === 'posts' ? (
-        posts.length > 0 ? (
+        sortedPosts.length > 0 ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {sortedPosts.map((p, i) => (
-              <PostCard key={i} post={p} rank={i < 3 ? `Top #${i + 1}` : undefined} />
+              <PostCard key={`post-${i}`} post={p} rank={`#${i + 1}`} />
             ))}
           </div>
         ) : (
-          <div className="ds-card mt-6 text-center">
+          <div className="ds-card mt-6">
             <p className="text-sm text-[var(--ds-text-secondary)]">
-              No posts were collected for this company.
+              No posts available for this analysis.
             </p>
           </div>
         )

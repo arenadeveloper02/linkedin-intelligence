@@ -21,8 +21,9 @@ interface CompetitorModalProps {
   company: SelectedCompany | null;
   /** The Arena run id for the open report; used to detect a saved comparison. */
   runId: string | null;
-  /** Called with the saved competitor output; the comparison renders on the main screen. */
-  onOpenExisting: (output: AnalysisOutput) => void;
+  /** Called with the saved competitor output and any saved comparison report
+   *  text; the comparison renders on the main screen. */
+  onOpenExisting: (output: AnalysisOutput, compare: string | null) => void;
 }
 
 type ModalStatus = 'idle' | 'searching' | 'results' | 'empty' | 'error';
@@ -53,6 +54,8 @@ export default function CompetitorModal({
   const [companies, setCompanies] = useState<CompanyResult[]>([]);
   // Saved competitor analysis for this run (if the comparison already exists).
   const [existingOutput, setExistingOutput] = useState<AnalysisOutput | null>(null);
+  // Saved comparison report text ('compare' key) for this run, when present.
+  const [existingCompare, setExistingCompare] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
   // When the modal opens, fetch ONLY this run via the single-run Arena
@@ -63,6 +66,7 @@ export default function CompetitorModal({
     if (!open || !runId) return;
     let cancelled = false;
     setExistingOutput(null);
+    setExistingCompare(null);
     setChecking(true);
     const load = async () => {
       try {
@@ -84,6 +88,9 @@ export default function CompetitorModal({
           Object.keys(out).length > 0
         ) {
           setExistingOutput(out);
+          setExistingCompare(
+            typeof run.compare === 'string' && run.compare.trim().length > 0 ? run.compare : null,
+          );
         }
       } catch {
         // ignore \u2014 the search flow below stays available
@@ -138,8 +145,9 @@ export default function CompetitorModal({
               Compare with another
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
-              Search for another company&rsquo;s LinkedIn page, pick the right match, and the
-              comparison report opens on the main screen.
+              {existingOutput
+                ? 'A competitor analysis was already generated for this analysis run. Open it to view it on the main screen.'
+                : 'Search for another company\u2019s LinkedIn page, pick the right match, and the comparison report opens on the main screen.'}
             </p>
           </div>
           <button type="button" onClick={onClose} className="btn-secondary shrink-0">
@@ -186,7 +194,7 @@ export default function CompetitorModal({
             </div>
             <button
               type="button"
-              onClick={() => onOpenExisting(existingOutput)}
+              onClick={() => onOpenExisting(existingOutput, existingCompare)}
               className="btn-gradient shrink-0"
             >
               Open
@@ -194,91 +202,95 @@ export default function CompetitorModal({
           </div>
         ) : null}
 
-        <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void runSearch();
-              }
-            }}
-            placeholder="Competitor company name"
-            disabled={status === 'searching'}
-            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
-          />
-          <button
-            type="button"
-            onClick={() => void runSearch()}
-            disabled={status === 'searching' || !query.trim()}
-            className="btn-gradient shrink-0"
-          >
-            {status === 'searching' ? 'Searching\u2026' : 'Search'}
-          </button>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
-          {EXAMPLES.map((name) => (
-            <button
-              key={name}
-              type="button"
-              disabled={status === 'searching'}
-              onClick={() => {
-                setQuery(name);
-                void runSearch(name);
-              }}
-              className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-
-        {status === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}
-
-        {status === 'error' ? (
-          <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
-            Unable to search companies. Please try again.
-          </p>
-        ) : null}
-
-        {status === 'empty' ? (
-          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
-            No matching companies found. Try a different name.
-          </p>
-        ) : null}
-
-        {status === 'results' ? (
-          <div className="mt-5 space-y-3">
-            {companies.map((c, index) => {
-              const meta = [c.industry, c.location].filter(Boolean).join(' \u00b7 ');
-              const cFollowers = formatFollowers(c.followers_count);
-              return (
-                <div
-                  key={`${c.id || 'no-id'}-${index}`}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-surface-subtle)] p-4"
+        {!existingOutput ? (
+          <>
+            <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--ds-border-default)] bg-white p-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void runSearch();
+                  }
+                }}
+                placeholder="Competitor company name"
+                disabled={status === 'searching'}
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--ds-text-primary)] outline-none placeholder:text-[var(--ds-grey-400)] disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => void runSearch()}
+                disabled={status === 'searching' || !query.trim()}
+                className="btn-gradient shrink-0"
+              >
+                {status === 'searching' ? 'Searching\u2026' : 'Search'}
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-[var(--ds-text-tertiary)]">Try:</span>
+              {EXAMPLES.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={status === 'searching'}
+                  onClick={() => {
+                    setQuery(name);
+                    void runSearch(name);
+                  }}
+                  className="pill transition hover:bg-[var(--ds-brand-surface,#F3F8FE)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <CompanyLogo name={c.name} logo={c.logo} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-[var(--ds-text-primary)]">{c.name}</p>
-                    {meta ? (
-                      <p className="text-xs text-[var(--ds-text-tertiary)]">{meta}</p>
-                    ) : null}
-                  </div>
-                  {cFollowers ? <span className="pill">{cFollowers}</span> : null}
-                  <button
-                    type="button"
-                    disabled={!c.id}
-                    onClick={() => onSelect(c)}
-                    className="btn-gradient"
-                  >
-                    Compare with another
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                  {name}
+                </button>
+              ))}
+            </div>
+
+            {status === 'searching' ? <div className="progress-indeterminate mt-4" /> : null}
+
+            {status === 'error' ? (
+              <p className="mt-4 text-sm font-medium text-[var(--ds-text-error)]">
+                Unable to search companies. Please try again.
+              </p>
+            ) : null}
+
+            {status === 'empty' ? (
+              <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">
+                No matching companies found. Try a different name.
+              </p>
+            ) : null}
+
+            {status === 'results' ? (
+              <div className="mt-5 space-y-3">
+                {companies.map((c, index) => {
+                  const meta = [c.industry, c.location].filter(Boolean).join(' \u00b7 ');
+                  const cFollowers = formatFollowers(c.followers_count);
+                  return (
+                    <div
+                      key={`${c.id || 'no-id'}-${index}`}
+                      className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-surface-subtle)] p-4"
+                    >
+                      <CompanyLogo name={c.name} logo={c.logo} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-[var(--ds-text-primary)]">{c.name}</p>
+                        {meta ? (
+                          <p className="text-xs text-[var(--ds-text-tertiary)]">{meta}</p>
+                        ) : null}
+                      </div>
+                      {cFollowers ? <span className="pill">{cFollowers}</span> : null}
+                      <button
+                        type="button"
+                        disabled={!c.id}
+                        onClick={() => onSelect(c)}
+                        className="btn-gradient"
+                      >
+                        Compare with another
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
     </div>

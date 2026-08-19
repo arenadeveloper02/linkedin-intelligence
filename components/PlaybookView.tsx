@@ -20,7 +20,7 @@ function renderInline(text: string, prefix: string): ReactNode[] {
   );
 }
 
-function RichText({ text }: { text: string }) {
+export function RichText({ text }: { text: string }) {
   const lines = decodeUnicodeEscapes(text).split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let bullets: string[] = [];

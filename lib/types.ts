@@ -98,6 +98,8 @@ export interface ArenaRunEntry {
   summary?: string | null;
   /** Saved competitor analysis output (namespaced) for this run, when a competitor analysis exists. */
   competitorOutput?: AnalysisOutput | null;
+  /** Saved comparison report text for this run (the 'compare' key), when already generated. */
+  compare?: string | null;
 }
 
 export type PlaybookSource = 'own' | 'competitor';

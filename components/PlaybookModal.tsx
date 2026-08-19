@@ -80,8 +80,8 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
 
   const generate = async () => {
     if (!runId || status === 'loading') return;
-    // The saved summary is the own-brand playbook \u2014 only reuse it for OWN mode.
-    if (existing && mode === 'OWN') {
+    // When a saved playbook exists, just open it \u2014 no mode selection needed.
+    if (existing) {
       onResult(existing);
       return;
     }
@@ -126,7 +126,7 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
               Get the playbook
             </h2>
             <p className="mt-1 text-sm leading-6 text-[var(--ds-text-secondary)]">
-              {existing && mode === 'OWN'
+              {existing
                 ? 'A playbook was already generated for this analysis run. Open it to view it on the main screen.'
                 : 'Generate a prioritized strategic playbook for this analysis. The result opens on the main screen.'}
             </p>
@@ -136,53 +136,55 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
           </button>
         </div>
 
-        <fieldset className="mt-5">
-          <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
-            Playbook mode
-          </legend>
-          <div className="mt-2 flex flex-wrap gap-3">
-            <label
-              className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                mode === 'OWN'
-                  ? 'border-[var(--ds-border-focus,#1A73E8)] bg-[var(--ds-brand-surface,#F3F8FE)] text-[var(--ds-text-link,#1A73E8)]'
-                  : 'border-[var(--ds-border-default)] bg-white text-[var(--ds-text-secondary)]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="playbook-mode"
-                value="OWN"
-                checked={mode === 'OWN'}
-                onChange={() => {
-                  setMode('OWN');
-                  if (status === 'error') setStatus('idle');
-                }}
-                className="h-4 w-4 accent-[#1A73E8]"
-              />
-              Own brand
-            </label>
-            <label
-              className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                mode === 'COMPETITOR'
-                  ? 'border-[var(--ds-border-focus,#1A73E8)] bg-[var(--ds-brand-surface,#F3F8FE)] text-[var(--ds-text-link,#1A73E8)]'
-                  : 'border-[var(--ds-border-default)] bg-white text-[var(--ds-text-secondary)]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="playbook-mode"
-                value="COMPETITOR"
-                checked={mode === 'COMPETITOR'}
-                onChange={() => {
-                  setMode('COMPETITOR');
-                  if (status === 'error') setStatus('idle');
-                }}
-                className="h-4 w-4 accent-[#1A73E8]"
-              />
-              Competitor
-            </label>
-          </div>
-        </fieldset>
+        {!existing ? (
+          <fieldset className="mt-5">
+            <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-tertiary)]">
+              Playbook mode
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  mode === 'OWN'
+                    ? 'border-[var(--ds-border-focus,#1A73E8)] bg-[var(--ds-brand-surface,#F3F8FE)] text-[var(--ds-text-link,#1A73E8)]'
+                    : 'border-[var(--ds-border-default)] bg-white text-[var(--ds-text-secondary)]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="playbook-mode"
+                  value="OWN"
+                  checked={mode === 'OWN'}
+                  onChange={() => {
+                    setMode('OWN');
+                    if (status === 'error') setStatus('idle');
+                  }}
+                  className="h-4 w-4 accent-[#1A73E8]"
+                />
+                Own brand
+              </label>
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  mode === 'COMPETITOR'
+                    ? 'border-[var(--ds-border-focus,#1A73E8)] bg-[var(--ds-brand-surface,#F3F8FE)] text-[var(--ds-text-link,#1A73E8)]'
+                    : 'border-[var(--ds-border-default)] bg-white text-[var(--ds-text-secondary)]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="playbook-mode"
+                  value="COMPETITOR"
+                  checked={mode === 'COMPETITOR'}
+                  onChange={() => {
+                    setMode('COMPETITOR');
+                    if (status === 'error') setStatus('idle');
+                  }}
+                  className="h-4 w-4 accent-[#1A73E8]"
+                />
+                Competitor
+              </label>
+            </div>
+          </fieldset>
+        ) : null}
 
         <div className="mt-5 flex justify-end">
           <button
@@ -193,7 +195,7 @@ export default function PlaybookModal({ open, onClose, runId, onResult }: Playbo
           >
             {status === 'loading'
               ? 'Generating playbook\u2026'
-              : existing && mode === 'OWN'
+              : existing
                 ? 'Open'
                 : 'Get the playbook'}
           </button>

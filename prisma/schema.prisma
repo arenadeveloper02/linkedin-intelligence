@@ -22,7 +22,5 @@ model Analysis {
   status       String
   output       String
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt @default(now())
-
-  @@index([emailId, createdAt])
+  updatedAt    DateTime @default(now()) @updatedAt
 }
